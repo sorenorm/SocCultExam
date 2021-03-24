@@ -1,0 +1,193 @@
+---
+title: "Societies V1"
+author: "Ormo"
+date: "3/20/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load(tidyverse)
+```
+
+Initial societal architecture - Productiveness only. Happiness = Productiveness
+```{r}
+# function for creating a society
+create.society <- function(population.size){
+  # Number of agents in each society
+  population.size <- population.size
+
+  # List of agent attributes
+  attributes <- c("ID", "Happiness")
+
+  # Number of attributes
+  attributes.length <- length(attributes)
+  
+  # Mean happiness
+  happiness.mean = 0.5
+  
+  # Standard deviation of happiness
+  happiness.sd = 0.4
+
+  # Structuring a society
+  df = data.frame(matrix(vector(), population.size, attributes.length,
+                  dimnames=list(c(), attributes)),
+                  stringsAsFactors=F) %>% 
+    mutate(ID = 1:population.size %>% as.factor(), # Agent ID
+           Happiness = rnorm(population.size, 
+                             mean = happiness.mean, # mean og happiness
+                             sd = happiness.sd), #  spread of happiness
+           Happiness = ifelse(Happiness < 0, 0, Happiness), # Making sure nobody is too depressed
+           Happiness = ifelse(Happiness > 1, 1, Happiness), # Nobody should be too happy either, sorry.
+           Productivity = Happiness
+           )
+  
+  return(df)
+}
+
+# Function for matching societies at random
+randomPairs <- function(list){
+  mix <- sample(list, length(list)/2)
+  match <- sample(list[-mix])
+  return(data.frame(mix, match))
+}
+
+```
+
+
+```{r}
+world.size = 1e1 # Number of societies
+population.size = 1e3 # Number of agents in each society
+rounds = 1e3 # Number of rounds for updating the society
+learning.rate = 0.7 # How quickly does the societies learn the optimal solution?
+rfactor.mean = 0 # Mean of random factor that enables evolution
+rfactor.sd = 0.05 # SD of random factor
+
+# Creating world as a list of societies
+world <- lapply(rep(population.size, world.size), create.society)
+
+# Saving start value
+happiness.anfang <- NULL
+for(i in 1:world.size){
+  happiness.anfang <- append(happiness.anfang, mean(world[[i]]$Happiness))
+}
+
+# Simulating rounds 
+for(i in 4:(rounds + 4)){
+  # Saving happiness from each round
+  for(j in 1:world.size){
+   world[[j]][i]<- world[[j]]$Happiness
+  }
+  
+  # Creating list for matching societies
+  rp <- randomPairs(1:world.size)
+  
+  for(j in 1:nrow(rp)){
+    
+    # Saving values in new name to make the code easier to read
+    Happiness.W1 <- world[[rp[j, 1]]]$Happiness
+    Happiness.W2 <- world[[rp[j, 2]]]$Happiness
+    
+    # If the productivity of rp2 is bigger than rp1, we want rp1 to learn from rp2
+    if(mean(world[[rp[j, 1]]]$Productivity) < mean(world[[rp[j, 2]]]$Productivity)) {
+      Happiness.W1 <- 
+        Happiness.W1 + (sample(Happiness.W2) - Happiness.W1) * learning.rate
+      } 
+    
+    else{
+      Happiness.W2 <- 
+        Happiness.W2 + (sample(Happiness.W1) - Happiness.W2) * learning.rate
+      }
+    
+    # Adding randomness to enable evolution
+    Happiness.W1 <-
+      Happiness.W1 + rnorm(n = population.size,
+                           mean = rfactor.mean,
+                           sd = rfactor.sd)
+    Happiness.W2 <-
+      Happiness.W2 + rnorm(n = population.size,
+                           mean = rfactor.mean,
+                           sd = rfactor.sd)
+    
+    # Not too happy and adding randomness to enable evolution 
+    Happiness.W1 <- 
+      ifelse(Happiness.W1 > 1, 1, Happiness.W1)
+    Happiness.W2 <- 
+      ifelse(Happiness.W2 > 1, 1, Happiness.W2)
+      
+    # Not too depressed
+    Happiness.W1 <- 
+      ifelse(Happiness.W1 < 0, 0, Happiness.W1)
+    Happiness.W2 <- 
+      ifelse(Happiness.W2 < 0, 0, Happiness.W2)
+    
+    # Updating Happiness
+    world[[rp[j,1]]]$Happiness <- Happiness.W1
+    world[[rp[j,2]]]$Happiness <- Happiness.W2
+    
+    # Updating productivity 
+    world[[rp[j,1]]]$Productivity <- world[[rp[j,1]]]$Happiness
+    world[[rp[j,2]]]$Productivity <- world[[rp[j,2]]]$Happiness
+  }
+}
+
+
+
+
+```
+
+```{r}
+# Summarizing initial society 
+
+happiness.all <- NULL
+for(i in 4:(rounds+4)){
+  happiness.round <- NULL
+  for (j in 1:world.size) {
+    happiness.round <- append(happiness.round, mean(world[[j]][, i]))
+  }
+  happiness.all <- append(happiness.all, happiness.round)
+}
+
+df.noMean <-
+  data.frame(
+    Happiness = happiness.all,
+    World = rep(1:world.size, rounds+1) %>% as.factor(),
+    Round = rep(0:rounds, each = world.size)
+  )
+)
+
+df <-
+  rbind(df.noMean,
+        data.frame(df.noMean %>% group_by(Round) %>% summarise(Happiness = mean(Happiness)),
+                   World = 'Mean'))
+
+```
+
+```{r}
+# Visualizing initial society 
+
+ggplot() +
+  geom_line(data = df[df$World != 'Mean',],
+            aes(x = Round, y = Happiness, color = World),
+            alpha = .7) +
+  geom_line(data = df[df$World == 'Mean',],
+            aes(x = Round, y = Happiness),
+            color = 'black', size = 1, alpha = .7) +
+  theme_bw()
+
+```
+
+```{r}
+Happiness.W2
+sort(Happiness.W2)
+```
+
+
+
+
+
+
+
