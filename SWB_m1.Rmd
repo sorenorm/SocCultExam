@@ -1,0 +1,111 @@
+---
+title: "Untitled"
+author: "Ormo"
+date: "5/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse, rethinking, rlist)
+
+theme_set(theme_minimal())
+```
+
+
+```{r defining variables}
+# baserate consumption
+br_c = as.numeric(1000)
+
+# Income equal or distribution?
+income = 5000
+
+# start wealth
+start_wealth = 10000
+
+# Materialism distributions
+
+dens(rbeta(100000, 2, 5))
+dens(rbeta(100000, 5, 5))
+dens(rbeta(100000, 5, 2))
+
+
+md <- data.frame(
+  high = rbeta(100000, 5, 2),
+  medium = rbeta(100000, 5, 5),
+  low = rbeta(100000, 2, 5)
+)
+
+x <- seq(from = 1, to = 100000, by = 1000)
+y <- (x/10000)/sqrt(1 + (x/10000)^2)
+
+data.frame(x = x, y = y) %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_line()
+
+
+```
+
+
+```{r creating agents}
+agent <- data.frame(
+  materialism = 'high', # discrete variable for now: high, medium, low - could be a distribution too
+  wealth = start_wealth, # wealth at round 0
+  consumption = 0, # consumption at round 0
+  # social_consumption = consumption *
+  # materistic_consumption = 1 - social_consumption
+  pp = 0, # personal property at round 0
+  swb = 0.5 # happiness at round 0
+)
+
+```
+
+
+```{r simulating rounds}
+rounds = 1:100
+
+for(i in rounds) {
+  i = i + 1
+
+  m = agent[i - 1, 1] # materialism staying the same for each round
+  c = br_c + (agent[i - 1,2] - br_c) * md[m][sample(1:100000, 1),] # consumption
+  w = agent[i - 1, 2] + income - c 
+  pp = agent[i - 1, 4] + c
+  swb = agent[i - 1, 5] * (w/10000)/sqrt(1 + (w/10000)^2)
+  
+  agent[i, ] <- c(m, w, c, pp, swb)
+  agent$wealth <- agent$wealth %>% as.numeric()
+  agent$consumption <- agent$consumption %>% as.numeric()
+  agent$pp <- agent$pp %>% as.numeric()
+  agent$swb <- agent$swb %>% as.numeric()
+}
+```
+
+
+```{r plots}
+agent$round <- seq.int(nrow(agent))
+
+
+agent %>% ggplot(aes(x = round, y = swb)) +
+  geom_line()
+
+agent %>% ggplot(aes(x = consumption, y = swb)) +
+  geom_point()
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
