@@ -19,7 +19,11 @@ theme_set(theme_minimal())
 br_c = as.numeric(1000)
 
 # Income equal or distribution?
-income = 5000
+id = data.frame(
+  high = rnorm(100000, mean = 20000, sd = 1000),
+  medium = rnorm(100000, mean = 12500, sd = 1000),
+  low = rnorm(100000, mean = 7500, sd = 1000)
+)
 
 # start wealth
 start_wealth = 10000
@@ -41,7 +45,7 @@ x <- seq(from = 1, to = 100000, by = 1000)
 y <- (x/10000)/sqrt(1 + (x/10000)^2)
 
 data.frame(x = x, y = y) %>% 
-  ggplot(aes(x = x, y = y)) +
+  ggplot(aes(x, y)) +
   geom_line()
 
 
@@ -49,37 +53,55 @@ data.frame(x = x, y = y) %>%
 
 
 ```{r creating agents}
-agent <- data.frame(
-  materialism = 'high', # discrete variable for now: high, medium, low - could be a distribution too
-  wealth = start_wealth, # wealth at round 0
-  consumption = 0, # consumption at round 0
-  # social_consumption = consumption *
-  # materistic_consumption = 1 - social_consumption
-  pp = 0, # personal property at round 0
-  swb = 0.5 # happiness at round 0
-)
+create.agent <- function(type) {
+  agent <- data.frame(
+    materialism = type[1], # discrete variable for now: high, medium, low - could be a distribution too
+    income = type[2], # discrete variable for now: high, medium, low - could be a distribution too
+    wealth = start_wealth, # wealth at round 0
+    consumption = 0, # consumption at round 0
+    # social_consumption = consumption *
+    # materistic_consumption = 1 - social_consumption
+    pp = 0, # personal property at round 0
+    swb = 0.5 # happiness at round 0
+  )
+}
 
 ```
+
+```{r}
+types <- expand.grid(materialism = c('high', 'medium', 'low'), 
+                     income = c('high', 'medium', 'low')) %>% t() %>% data.frame()
+
+world <- lapply(types, create.agent)
+
+```
+
 
 
 ```{r simulating rounds}
 rounds = 1:100
 
-for(i in rounds) {
-  i = i + 1
-
-  m = agent[i - 1, 1] # materialism staying the same for each round
-  c = br_c + (agent[i - 1,2] - br_c) * md[m][sample(1:100000, 1),] # consumption
-  w = agent[i - 1, 2] + income - c 
-  pp = agent[i - 1, 4] + c
-  swb = agent[i - 1, 5] * (w/10000)/sqrt(1 + (w/10000)^2)
-  
-  agent[i, ] <- c(m, w, c, pp, swb)
-  agent$wealth <- agent$wealth %>% as.numeric()
-  agent$consumption <- agent$consumption %>% as.numeric()
-  agent$pp <- agent$pp %>% as.numeric()
-  agent$swb <- agent$swb %>% as.numeric()
+for(j in 1:length(world)) {
+  agent <- world[[j]]
+  for (i in rounds) {
+    i = i + 1
+    
+    m = agent$materialism[i - 1] # materialism staying the same for each round
+    income = agent$income[i - 1] # income level staying the same for each round
+    c = br_c + (agent$wealth[i - 1] - br_c) * md[m][sample(1:100000, 1), ] # consumption
+    w = agent$wealth[i - 1] + id[income][sample(1:100000, 1), ] - c
+    pp = agent$pp[i - 1] + c
+    swb = agent$swb[i - 1] * (w / 10000) / sqrt(1 + (w / 10000) ^ 2)
+    
+    agent[i,] <- c(m, income, w, c, pp, swb)
+    agent$wealth <- agent$wealth %>% as.numeric()
+    agent$consumption <- agent$consumption %>% as.numeric()
+    agent$pp <- agent$pp %>% as.numeric()
+    agent$swb <- agent$swb %>% as.numeric()
+  }
+  world[[j]] <- agent
 }
+
 ```
 
 
