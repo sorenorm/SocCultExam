@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pacman::p_load(tidyverse, rethinking, rlist)
+pacman::p_load(tidyverse, rethinking, rlist, zoo)
 
 theme_set(theme_minimal())
 ```
@@ -62,7 +62,8 @@ create.agent <- function(type) {
     # social_consumption = consumption *
     # materistic_consumption = 1 - social_consumption
     pp = 0, # personal property at round 0
-    swb = 0.5 # happiness at round 0
+    swb = 0.5, # happiness at round 0
+    ID = NA
   )
 }
 
@@ -83,22 +84,26 @@ rounds = 1:100
 
 for(j in 1:length(world)) {
   agent <- world[[j]]
+  agent$ID[1] <- j
   for (i in rounds) {
     i = i + 1
     
-    m = agent$materialism[i - 1] # materialism staying the same for each round
-    income = agent$income[i - 1] # income level staying the same for each round
-    c = br_c + (agent$wealth[i - 1] - br_c) * md[m][sample(1:100000, 1), ] # consumption
-    w = agent$wealth[i - 1] + id[income][sample(1:100000, 1), ] - c
+    # m = agent$materialism[i - 1] # materialism staying the same for each round
+    # income = agent$income[i - 1] # income level staying the same for each round
+    c = br_c + (agent$wealth[i - 1] - br_c) * md[agent$materialism[1]][sample(1:100000, 1), ] # consumption
+    w = agent$wealth[i - 1] + id[agent$income[1]][sample(1:100000, 1), ] - c
     pp = agent$pp[i - 1] + c
     swb = agent$swb[i - 1] * (w / 10000) / sqrt(1 + (w / 10000) ^ 2)
+    ID = j
     
-    agent[i,] <- c(m, income, w, c, pp, swb)
+    agent[i,] <- c(NA, NA, w, c, pp, swb, NA)
     agent$wealth <- agent$wealth %>% as.numeric()
     agent$consumption <- agent$consumption %>% as.numeric()
     agent$pp <- agent$pp %>% as.numeric()
     agent$swb <- agent$swb %>% as.numeric()
   }
+  agent <- na.locf(agent)
+  agent$round <- seq.int(nrow(agent))
   world[[j]] <- agent
 }
 
@@ -106,15 +111,30 @@ for(j in 1:length(world)) {
 
 
 ```{r plots}
-agent$round <- seq.int(nrow(agent))
+#agent$round <- seq.int(nrow(agent))
 
 
-agent %>% ggplot(aes(x = round, y = swb)) +
+# agent %>% ggplot(aes(x = round, y = swb)) +
+#   geom_line()
+# 
+# agent %>% ggplot(aes(x = consumption, y = swb)) +
+#   geom_point()
+
+
+
+df <- rbind(world[[1]], 
+            world[[2]],
+            world[[3]], 
+            world[[4]],
+            world[[5]], 
+            world[[6]],
+            world[[7]], 
+            world[[8]],
+            world[[9]]) %>% 
+  mutate(ID = as.factor(ID))
+
+df %>% ggplot(aes(x = round, y = swb, color = ID)) +
   geom_line()
-
-agent %>% ggplot(aes(x = consumption, y = swb)) +
-  geom_point()
-
 
 ```
 
