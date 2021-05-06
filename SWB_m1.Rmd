@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pacman::p_load(tidyverse, rethinking, rlist, zoo)
+pacman::p_load(tidyverse, rethinking, zoo)
 
 theme_set(theme_minimal())
 ```
@@ -88,8 +88,6 @@ for(j in 1:length(world)) {
   for (i in rounds) {
     i = i + 1
     
-    # m = agent$materialism[i - 1] # materialism staying the same for each round
-    # income = agent$income[i - 1] # income level staying the same for each round
     c = br_c + (agent$wealth[i - 1] - br_c) * md[agent$materialism[1]][sample(1:100000, 1), ] # consumption
     w = agent$wealth[i - 1] + id[agent$income[1]][sample(1:100000, 1), ] - c
     pp = agent$pp[i - 1] + c
@@ -97,10 +95,6 @@ for(j in 1:length(world)) {
     ID = j
     
     agent[i,] <- c(NA, NA, w, c, pp, swb, NA)
-    agent$wealth <- agent$wealth %>% as.numeric()
-    agent$consumption <- agent$consumption %>% as.numeric()
-    agent$pp <- agent$pp %>% as.numeric()
-    agent$swb <- agent$swb %>% as.numeric()
   }
   agent <- na.locf(agent)
   agent$round <- seq.int(nrow(agent))
@@ -111,30 +105,31 @@ for(j in 1:length(world)) {
 
 
 ```{r plots}
-#agent$round <- seq.int(nrow(agent))
+d <- data.frame(
+    materialism = NA,
+    income = NA, 
+    wealth = NA, 
+    consumption = NA, 
+    pp = NA,
+    swb = NA, 
+    ID = NA,
+    round = NA
+)
 
+for(i in 1:length(world)){
+  d = rbind(d, world[[i]])
+}
 
-# agent %>% ggplot(aes(x = round, y = swb)) +
-#   geom_line()
-# 
-# agent %>% ggplot(aes(x = consumption, y = swb)) +
-#   geom_point()
-
-
-
-df <- rbind(world[[1]], 
-            world[[2]],
-            world[[3]], 
-            world[[4]],
-            world[[5]], 
-            world[[6]],
-            world[[7]], 
-            world[[8]],
-            world[[9]]) %>% 
+d <- d %>% 
+  na.omit() %>% 
   mutate(ID = as.factor(ID))
 
-df %>% ggplot(aes(x = round, y = swb, color = ID)) +
+d %>% ggplot(aes(x = round, y = swb, color = ID)) +
   geom_line()
+
+d %>% ggplot(aes(x = wealth, y = swb, color = ID)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
 
 ```
 
