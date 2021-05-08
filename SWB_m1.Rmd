@@ -8,15 +8,37 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pacman::p_load(tidyverse, rethinking, zoo)
+pacman::p_load(tidyverse, 
+               rethinking,
+               zoo, 
+               viridis,
+               bayesplot)
 
 theme_set(theme_minimal())
+
+
+
+color_scheme_set("Spectral")
 ```
 
 
 ```{r defining variables}
 # baserate consumption
 br_c = as.numeric(1000)
+
+# start wealth
+start_wealth = 10000
+
+dens(rbeta(100000, 2, 5))
+dens(rbeta(100000, 5, 5))
+dens(rbeta(100000, 5, 2))
+
+# Materialism distributions
+md <- data.frame(
+  high = rbeta(100000, 5, 2),
+  medium = rbeta(100000, 5, 5),
+  low = rbeta(100000, 2, 5)
+)
 
 # Income equal or distribution?
 id = data.frame(
@@ -25,21 +47,10 @@ id = data.frame(
   low = rnorm(100000, mean = 7500, sd = 1000)
 )
 
-# start wealth
-start_wealth = 10000
-
-# Materialism distributions
-
-dens(rbeta(100000, 2, 5))
-dens(rbeta(100000, 5, 5))
-dens(rbeta(100000, 5, 2))
-
-
-md <- data.frame(
+effect_c <- data.frame(
   high = rbeta(100000, 5, 2),
   medium = rbeta(100000, 5, 5),
-  low = rbeta(100000, 2, 5)
-)
+  low = rbeta(100000, 2, 5))
 
 x <- seq(from = 1, to = 100000, by = 1000)
 y <- (x/10000)/sqrt(1 + (x/10000)^2)
@@ -47,7 +58,6 @@ y <- (x/10000)/sqrt(1 + (x/10000)^2)
 data.frame(x = x, y = y) %>% 
   ggplot(aes(x, y)) +
   geom_line()
-
 
 ```
 
@@ -57,13 +67,14 @@ create.agent <- function(type) {
   agent <- data.frame(
     materialism = type[1], # discrete variable for now: high, medium, low - could be a distribution too
     income = type[2], # discrete variable for now: high, medium, low - could be a distribution too
-    wealth = start_wealth, # wealth at round 0
+    wealth = id[type[2]][sample(1:100000, 1), ]*3, # wealth at round 0
     consumption = 0, # consumption at round 0
     # social_consumption = consumption *
     # materistic_consumption = 1 - social_consumption
     pp = 0, # personal property at round 0
-    swb = 0.5, # happiness at round 0
-    ID = NA
+    swb = rbeta(1, 5, 5), # happiness at round 0
+    ID = NA,
+    type = paste(type[1], type[2])
   )
 }
 
@@ -73,14 +84,15 @@ create.agent <- function(type) {
 types <- expand.grid(materialism = c('high', 'medium', 'low'), 
                      income = c('high', 'medium', 'low')) %>% t() %>% data.frame()
 
-world <- lapply(types, create.agent)
 
 ```
 
 
-
 ```{r simulating rounds}
+world <- lapply(rep(types, 3), create.agent)
+
 rounds = 1:100
+
 
 for(j in 1:length(world)) {
   agent <- world[[j]]
@@ -91,10 +103,12 @@ for(j in 1:length(world)) {
     c = br_c + (agent$wealth[i - 1] - br_c) * md[agent$materialism[1]][sample(1:100000, 1), ] # consumption
     w = agent$wealth[i - 1] + id[agent$income[1]][sample(1:100000, 1), ] - c
     pp = agent$pp[i - 1] + c
-    swb = agent$swb[i - 1] * (w / 10000) / sqrt(1 + (w / 10000) ^ 2)
-    ID = j
+    swb = 0.5 * rbeta(1, 5, 5) + # Set point
+      0.4 * (agent$swb[i - 1] * (w / 10000) / sqrt(1 + (w / 10000) ^ 2) + # wealth
+               c * effect_c[agent$materialism[1]][sample(1:100000, 1), ]/100000 ) + # consumption
+      0.1* rbeta(1, 5, 5) # Cricumstances
     
-    agent[i,] <- c(NA, NA, w, c, pp, swb, NA)
+    agent[i,] <- c(NA, NA, w, c, pp, swb, NA, NA)
   }
   agent <- na.locf(agent)
   agent$round <- seq.int(nrow(agent))
@@ -113,7 +127,8 @@ d <- data.frame(
     pp = NA,
     swb = NA, 
     ID = NA,
-    round = NA
+    round = NA,
+    type = NA
 )
 
 for(i in 1:length(world)){
@@ -125,11 +140,14 @@ d <- d %>%
   mutate(ID = as.factor(ID))
 
 d %>% ggplot(aes(x = round, y = swb, color = ID)) +
-  geom_line()
+  geom_line(alpha = 0.5)
 
-d %>% ggplot(aes(x = wealth, y = swb, color = ID)) +
-  geom_point() +
+d %>% ggplot(aes(x = wealth, y = swb, color = type)) +
+  geom_point(shape = 1, alpha = 0.7) +
   geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = round, y = wealth, color = type)) +
+  geom_line()
 
 ```
 
