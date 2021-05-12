@@ -10,51 +10,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 pacman::p_load(tidyverse, 
                rethinking,
-               zoo, 
-               viridis,
-               bayesplot)
+               zoo,
+               naniar)
 
 theme_set(theme_minimal())
 
-
-
-color_scheme_set("Spectral")
 ```
 
 
 ```{r defining variables}
 # baserate consumption
-br_c = as.numeric(1000)
-
-# start wealth
-start_wealth = 10000
-
 dens(rbeta(100000, 2, 5))
 dens(rbeta(100000, 5, 5))
 dens(rbeta(100000, 5, 2))
-
-# Materialism distributions
-md <- data.frame(
-  high = rbeta(100000, 5, 2),
-  medium = rbeta(100000, 5, 5),
-  low = rbeta(100000, 2, 5)
-)
-
-# Income equal or distribution? try with stable incomes
-id = data.frame(
-  high = rnorm(100000, mean = 20000, sd = 1000),
-  medium = rnorm(100000, mean = 12500, sd = 1000),
-  low = rnorm(100000, mean = 7500, sd = 1000)
-)
-
-rnorm(100000, mean = 20000, sd = 1000) %>% dens()
-rnorm(100000, mean = 12500, sd = 1000) %>% dens()
-rnorm(100000, mean = 7500, sd = 1000) %>% dens()
-
-effect_c <- data.frame(
-  high = rbeta(100000, 5, 2),
-  medium = rbeta(100000, 5, 5),
-  low = rbeta(100000, 2, 5))
 
 x <- seq(from = 1, to = 100000, by = 1000)
 y <- (x/10000)/sqrt(1 + (x/10000)^2)
@@ -63,13 +31,16 @@ data.frame(x = x, y = y) %>%
   ggplot(aes(x, y)) +
   geom_line()
 
+
+# (swb_consumption / 1e6) / sqrt(1 + (swb_consumption / 1e6) ^ 2)
 ```
 
 
 ```{r creating agents}
-create.agent <- function(type) {
+create.agent <- function(input) {
   income = sample(10000:100000, 1)
   set_level = rbeta(1, 5, 5)
+  circumstance = rbeta(1, 5, 5)
   
   agent <- data.frame(
     materialism = sample(1:100000, 1)/100000, # fixed materialism values
@@ -79,53 +50,80 @@ create.agent <- function(type) {
     # social_consumption = consumption *
     # materistic_consumption = 1 - social_consumption
     pp = 0, # personal property at round 0
-    swb = 0.6 * set_level + 0.4 * rbeta(1, 5, 5), # happiness at round 0 - try with Denmark as a starting point
-    swb_consumption = 0,
+    swb = NA,
+    AL = 0,
     ID = NA,
-    set_level = set_level
+    set_level = set_level, # unchanging factor from genetics etc.
+    circumstance =  circumstance, # largely unchanged circumstances and demographic factor
+    round = 1,
+    swb_c = NA
   )
 }
 
 ```
 
 ```{r simulating rounds}
-rounds = 1:100
-n_agents = 5
-
+rounds = 2:501
+n_agents = 100
+n_ads = 1000
+br_c = 9000
 
 world <- lapply(rep(1:n_agents, 1), create.agent)
 
-
-for(j in 1:length(world)) {
+for(j in 1:n_agents) {
   agent <- world[[j]]
   agent$ID[1] <- j
   for (i in rounds) {
-    i = i + 1
+    ID <- agent$ID[1]
+    m = agent$materialism[1] # constant materialism level
+    income = agent$income[1] # constant income level
+    w = agent$wealth[i - 1] # wealth from previous round
     
-    c = br_c + (agent$wealth[i - 1] - br_c) * 
-      rbeta(1, 10*agent$materialism[1], 10*(1-agent$materialism[1])) # consumption
-    w = agent$wealth[i - 1] + agent$income[1] - c
-    pp = agent$pp[i - 1] + c
+    disposible_w = w + income - br_c
     
-    swb_consumption = 0
+    c = rbinom(1, 1, m) * (# chance that an agent consume determined by materialism
+      disposible_w * rbeta(1, 10 * m, 10 * (1 - m)) # proportion of wealth spent determined by materialism
+      )
+      
+    w = disposible_w - c # wealth after consumption
+      
+    pp = ifelse(c == 0, 0, sample(1:n_ads, 1))
+      
+    AL = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c
+    AL_lack = agent$AL[i - 1]
     
-    for(k in 1:(i-1)){
-      swb_consumption = swb_consumption + 1/k^2 * agent$consumption[k] + c
-    }
+    swb_c = ifelse(AL_lack == 0, 0, AL/AL_lack) 
     
-    swb = 0.6 * agent$set_level[1] + 0.4 * (swb_consumption/10000)/sqrt(1 + (swb_consumption/10000)^2) # consumption
+    swb = 0.5 * agent$set_level[1] + # set level happiness
+      0.1 * agent$circumstance[1] + # c
+      0.4 * inv_logit(swb_c - 1)
+      
+    round = i
     
-    agent[i,] <- c(NA, NA, w, c, pp, swb, swb_consumption, NA, NA)
+    agent[i,] <- c(
+      m,
+      income,
+      w,
+      c,
+      pp,
+      swb,
+      AL,
+      ID,
+      agent$set_level[1],
+      agent$circumstance[1],
+      round,
+      swb_c
+    )
+    
   }
-  agent <- na.locf(agent)
-  agent$round <- seq.int(nrow(agent))
   world[[j]] <- agent
+  print(j)
 }
 
 ```
 
 
-```{r plots}
+```{r data formatting}
 d <- data.frame(
     materialism = NA,
     income = NA, 
@@ -133,42 +131,82 @@ d <- data.frame(
     consumption = NA, 
     pp = NA,
     swb = NA, 
+    AL = NA,
     ID = NA,
-    swb_consumption = NA,
+    set_level = NA,
+    circumstance = NA,
     round = NA,
-    set_level = NA
+    swb_c = NA
 )
 
 for(i in 1:length(world)){
-  d = rbind(d, world[[i]])
+  d = rbind(d, world[[i]][rounds,])
 }
 
 d <- d %>% 
   na.omit() %>% 
-  mutate(ID = as.factor(ID))
+  mutate(ID = as.factor(ID),
+         round = round - 1)
+```
 
-d %>% ggplot(aes(x = round, y = swb, color = ID)) +
-  geom_line(alpha = 0.5)
+```{r}
+d %>% filter(ID %in% sample(1:n_agents, 5)) %>% ggplot(aes(x = round, y = swb, color = ID)) +
+  geom_line()
 
+world[[7]] %>% ggplot(aes(x = round)) +
+  geom_line(aes(y = consumption), color = 'firebrick') +
+  geom_line(aes(y = AL), color = 'royalblue')
+world[[7]]$materialism
+
+```
+
+
+
+
+```{r plots}
 d %>% ggplot(aes(x = wealth, y = swb, color = ID)) +
   geom_point(shape = 1, alpha = 0.7) +
-  geom_smooth(method = 'lm')
+  geom_smooth(method = 'lm') +
+  xlim(0,1e5) +
+  ylim(0,1)
 
 d %>% ggplot(aes(x = round, y = wealth, color = ID)) +
   geom_line()
 
-d %>% ggplot(aes(x = materialism, y = swb - set_level)) +
+d %>% ggplot(aes(x = consumption, y = swb - set_level - circumstance, color = ID)) +
   geom_jitter(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
-d %>% ggplot(aes(x = consumption, y = swb - set_level, color = ID)) +
+d %>% ggplot(aes(x = consumption, y = swb, color = ID)) +
   geom_jitter(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
-d %>% ggplot(aes(x = consumption, y = swb_consumption, color = ID)) +
-  geom_jitter(alpha = 0.8, shape = 1) +
+d %>% ggplot(aes(x = materialism, y = swb - set_level - circumstance)) +
+  geom_jitter(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
-  
+
+d %>% ggplot(aes(x = materialism, y = swb)) +
+  geom_jitter(alpha = 0.3, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = round, y = AL, color = ID)) +
+  geom_line(alpha = 0.7) + ylim(0, 1e6)
+
+
+d %>% ggplot(aes(x = round, y = swb_c, color = ID)) +
+  geom_line(alpha = 0.7) + ylim(0,10)
+```
+
+
+```{r correlation tests}
+cor.test(d$materialism, d$swb - d$set_level - d$circumstance)
+
+cor.test(d$wealth, d$swb - d$set_level - d$circumstance)
+
+cor.test(d$materialism, d$swb)
+
+cor.test(d$wealth, d$swb)
+
 
 ```
 
@@ -183,5 +221,52 @@ d %>% ggplot(aes(x = consumption, y = swb_consumption, color = ID)) +
 
 
 
+```{r}
+# i = 2
+# j = 1
+# 
+# for(j in 1:length(world)) {
+#   agent <- world[[j]]
+#   agent$ID[1] <- j
+#   for (i in rounds) {
+#     i = i + 1
+#     m = agent$materialism[1]
+#     
+#     disposible_w = agent$wealth[i-1] + agent$income[1] - br_c # Agent wealth before consumption
+#     c = rbinom(1, 1, m) * ( # chance that an agent consume
+#       disposible_w * rbeta(1, 10 * m, 10 * (1 - m)) # proportion of wealth spent determined by materialism
+#     )
+#     
+#     w = disposible_w - c
+#     
+#     pp = ifelse(c == 0, 0, sample(1:n_ads, 1)) # personal property
+#     
+#     swb_consumption = 0 # placeholder variable
+#     
+#     
+#     swb_consumption = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c
+#     
+#     swb = 0.5 * agent$set_level[1] + # set level happiness
+#       0.1 * agent$circumstance[1] + # c
+#       0.4 * (swb_consumption/1000)/sqrt(1 + (swb_consumption/1000)^2) # consumption
+#     
+#     round = i - 1
+#     
+#     agent[i, ] <- c(m, 
+#                     agent$income[1], 
+#                     w, 
+#                     c, 
+#                     pp, 
+#                     swb, 
+#                     swb_consumption, 
+#                     agent$ID[1], 
+#                     agent$set_level[1], 
+#                     agent$circumstance[1], 
+#                     round)
+#   }
+#   world[[j]] <- agent
+#   # print(j)
+# }
+```
 
 
