@@ -24,15 +24,6 @@ dens(rbeta(100000, 2, 5))
 dens(rbeta(100000, 5, 5))
 dens(rbeta(100000, 5, 2))
 
-x <- seq(from = 1, to = 100000, by = 1000)
-y <- (x/10000)/sqrt(1 + (x/10000)^2)
-
-data.frame(x = x, y = y) %>% 
-  ggplot(aes(x, y)) +
-  geom_line()
-
-
-# (swb_consumption / 1e6) / sqrt(1 + (swb_consumption / 1e6) ^ 2)
 ```
 
 
@@ -43,7 +34,7 @@ create.agent <- function(input) {
   circumstance = rbeta(1, 5, 5)
   
   agent <- data.frame(
-    materialism = sample(1:100000, 1)/100000, # fixed materialism values
+    materialism = rbeta(1, 5, 5), # fixed materialism values
     income = income, # fixed income randomly assigned
     wealth = income * 3, # wealth at round 0
     consumption = 0, # consumption at round 0
@@ -56,15 +47,16 @@ create.agent <- function(input) {
     set_level = set_level, # unchanging factor from genetics etc.
     circumstance =  circumstance, # largely unchanged circumstances and demographic factor
     round = 1,
-    swb_c = NA
+    swb_c = NA,
+    ad
   )
 }
 
 ```
 
 ```{r simulating rounds}
-rounds = 2:501
-n_agents = 100
+rounds = 2:101
+n_agents = 20
 n_ads = 1000
 br_c = 9000
 
@@ -92,12 +84,12 @@ for(j in 1:n_agents) {
     AL = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c
     AL_lack = agent$AL[i - 1]
     
-    swb_c = ifelse(AL_lack == 0, 0, AL/AL_lack) 
+    swb_c = (AL - AL_lack)/((AL + AL_lack)/2)
     
     swb = 0.5 * agent$set_level[1] + # set level happiness
       0.1 * agent$circumstance[1] + # c
-      0.4 * inv_logit(swb_c - 1)
-      
+      0.4 * inv_logit(swb_c)
+    
     round = i
     
     agent[i,] <- c(
@@ -117,9 +109,11 @@ for(j in 1:n_agents) {
     
   }
   world[[j]] <- agent
-  print(j)
+  #print(j)
 }
 
+m = 0.99999
+rbeta(1e5, 10 * m, 10 * (1 - m)) %>% dens()
 ```
 
 
@@ -154,9 +148,8 @@ d %>% filter(ID %in% sample(1:n_agents, 5)) %>% ggplot(aes(x = round, y = swb, c
   geom_line()
 
 world[[7]] %>% ggplot(aes(x = round)) +
-  geom_line(aes(y = consumption), color = 'firebrick') +
-  geom_line(aes(y = AL), color = 'royalblue')
-world[[7]]$materialism
+  geom_line(aes(y = consumption), color = 'firebrick') 
+
 
 ```
 
@@ -192,9 +185,12 @@ d %>% ggplot(aes(x = materialism, y = swb)) +
 d %>% ggplot(aes(x = round, y = AL, color = ID)) +
   geom_line(alpha = 0.7) + ylim(0, 1e6)
 
-
 d %>% ggplot(aes(x = round, y = swb_c, color = ID)) +
-  geom_line(alpha = 0.7) + ylim(0,10)
+  geom_line(alpha = 0.7)
+
+d %>% ggplot(aes(x = round, y = inv_logit(swb_c), color = ID)) +
+  geom_line(alpha = 0.7)
+
 ```
 
 
