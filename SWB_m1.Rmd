@@ -17,16 +17,6 @@ theme_set(theme_minimal())
 
 ```
 
-
-```{r defining variables}
-# baserate consumption
-dens(rbeta(100000, 2, 5))
-dens(rbeta(100000, 5, 5))
-dens(rbeta(100000, 5, 2))
-
-```
-
-
 ```{r creating agents}
 create.agent <- function(input) {
   income = sample(10000:100000, 1)
@@ -48,17 +38,20 @@ create.agent <- function(input) {
     circumstance =  circumstance, # largely unchanged circumstances and demographic factor
     round = 1,
     swb_c = NA,
-    ad
+    ad = 0
   )
 }
 
 ```
 
 ```{r simulating rounds}
-rounds = 2:101
-n_agents = 20
-n_ads = 1000
+rounds = 2:2001
+n_agents = 1
+
 br_c = 9000
+
+n_prods = 1000
+ad_xrate = 1
 
 world <- lapply(rep(1:n_agents, 1), create.agent)
 
@@ -73,22 +66,29 @@ for(j in 1:n_agents) {
     
     disposible_w = w + income - br_c
     
+    ## influence of consumption on SWB using AL theory
     c = rbinom(1, 1, m) * (# chance that an agent consume determined by materialism
-      disposible_w * rbeta(1, 10 * m, 10 * (1 - m)) # proportion of wealth spent determined by materialism
-      )
-      
+      disposible_w * rbeta(1, 10 * m, 10 * (1 - m))) # proportion of wealth spent determined by materialism
     w = disposible_w - c # wealth after consumption
-      
-    pp = ifelse(c == 0, 0, sample(1:n_ads, 1))
-      
-    AL = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c
-    AL_lack = agent$AL[i - 1]
+    n_prods = ifelse(c == 0, n_prods, n_prods + 1) # market diversity expanding as a response to products being consumed
     
-    swb_c = (AL - AL_lack)/((AL + AL_lack)/2)
+    AL = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c # AL at round i
+    AL_lack = agent$AL[i - 1] # AL at round i - 1
+    swb_c = ifelse(AL_lack == 0, 0, (AL - AL_lack)/((AL + AL_lack)/2)) # Relative AL
+    
+    ## influence of ad exposure on SWB
+    n_ads = rpois(1, ad_xrate)
+    ad = sample(1:n_prods, n_ads) # What ads does an agent see?
+    ad = ifelse(n_ads == 0, 0, ad) # if sample is empty, then ad = 0
+    pp = ifelse(c == 0, 0, sample(1:n_prods, 1)) # What products does an agent have
+    
+    infl_ad = ifelse(ad != 0 & ad %in% agent$pp, 1, 0)
+    
     
     swb = 0.5 * agent$set_level[1] + # set level happiness
       0.1 * agent$circumstance[1] + # c
-      0.4 * inv_logit(swb_c)
+      0.4 * m * inv_logit(swb_c) +
+      0.4 * (1-m) * rbeta(1,5,5)
     
     round = i
     
@@ -104,16 +104,19 @@ for(j in 1:n_agents) {
       agent$set_level[1],
       agent$circumstance[1],
       round,
-      swb_c
+      swb_c,
+      ad = 0
     )
+    
+    agent$ad[i] <- paste(ad, collapse = ',')
     
   }
   world[[j]] <- agent
   #print(j)
 }
 
-m = 0.99999
-rbeta(1e5, 10 * m, 10 * (1 - m)) %>% dens()
+agent$pp == 761
+agent$pp
 ```
 
 
@@ -130,7 +133,8 @@ d <- data.frame(
     set_level = NA,
     circumstance = NA,
     round = NA,
-    swb_c = NA
+    swb_c = NA,
+    ad = NA
 )
 
 for(i in 1:length(world)){
@@ -151,10 +155,18 @@ world[[7]] %>% ggplot(aes(x = round)) +
   geom_line(aes(y = consumption), color = 'firebrick') 
 
 
+world[[7]] %>% ggplot(aes(x = round)) +
+  geom_line(aes(y = swb), color = 'firebrick') +
+  geom_line(aes(y = inv_logit(swb_c)))
+
+rbind(
+  filter(d, materialism == max(d$materialism)),
+  filter(d, materialism == min(d$materialism))
+) %>% ggplot(aes(x = round, color = ID)) +
+  geom_line(aes(y = swb))
+
+
 ```
-
-
-
 
 ```{r plots}
 d %>% ggplot(aes(x = wealth, y = swb, color = ID)) +
@@ -190,6 +202,14 @@ d %>% ggplot(aes(x = round, y = swb_c, color = ID)) +
 
 d %>% ggplot(aes(x = round, y = inv_logit(swb_c), color = ID)) +
   geom_line(alpha = 0.7)
+
+d %>% ggplot(aes(x = scale(income), y = swb - set_level - circumstance)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = scale(income), y = swb)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
 
 ```
 
