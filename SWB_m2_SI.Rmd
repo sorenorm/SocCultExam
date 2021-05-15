@@ -1,0 +1,251 @@
+---
+title: "Untitled"
+author: "Ormo"
+date: "5/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse, 
+               rethinking,
+               zoo,
+               naniar)
+
+theme_set(theme_minimal())
+
+```
+
+```{r}
+create.agent <- function(input) {
+  income = sample(10000:100000, 1)
+  set_level = rbeta(1, 5, 5)
+  circumstance = rbeta(1, 5, 5)
+  
+  agent <- data.frame(
+    materialism = rbeta(1, 5, 5), # fixed materialism values
+    income = income, # fixed income randomly assigned
+    wealth = income * 3, # wealth at round 0
+    consumption = 0, # consumption at round 0
+    # social_consumption = consumption *
+    # materistic_consumption = 1 - social_consumption
+    pp = 0, # personal property at round 0
+    swb = NA,
+    AL = 0,
+    ID = NA,
+    set_level = set_level, # unchanging factor from genetics etc.
+    circumstance =  circumstance, # largely unchanged circumstances and demographic factor
+    round = 1,
+    swb_c = NA,
+    ad = 0,
+    n_prods = 1000,
+    si = NA
+  )
+}
+
+randomPairs <- function(list) {
+  mix <- sample(list, length(list) / 2)
+  match <- sample(list[-mix])
+  return(data.frame(mix, match))
+}
+
+```
+
+
+
+
+```{r simulating rounds}
+rounds = 2:101
+n_agents = 10
+
+br_c = 9000
+ad_xrate = 1
+
+world <- lapply(rep(1:n_agents, 1), create.agent)
+
+
+for(i in rounds){
+  for(j in 1:n_agents){
+    agent <- world[[j]]
+    agent$ID[1] <- j
+    n_prods = agent$n_prods[i-1]
+  
+    ID <- agent$ID[1]
+    m = agent$materialism[1] # constant materialism level
+    income = agent$income[1] # constant income level
+    w = agent$wealth[i - 1] # wealth from previous round
+    
+    disposible_w = w + income - br_c
+    
+    ## influence of consumption on SWB using AL theory
+    c = rbinom(1, 1, m) * (# chance that an agent consume determined by materialism
+      disposible_w * rbeta(1, 10 * m, 10 * (1 - m))) # proportion of wealth spent determined by materialism
+    w = disposible_w - c # wealth after consumption
+    n_prods = ifelse(c == 0, n_prods, n_prods + 1) # market diversity expanding as a response to products being consumed
+    
+    AL = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c # AL at round i
+    AL_lack = agent$AL[i - 1] # AL at round i - 1
+    swb_c = ifelse(AL_lack == 0, 0, (AL - AL_lack)/((AL + AL_lack)/2)) # Relative AL
+    
+    ## influence of ad exposure on SWB
+    n_ads = rpois(1, ad_xrate)
+    pp = ifelse(c == 0, 0, sample(1:n_prods, 1)) # What products does an agent have
+    
+    max_mat_infl = rbeta(1, 10 * m, 10 * (1 - m)) # max influence of materialistic concepts on SWB
+    ad_con_split = rbeta(1,5,5) # the split influence of advertisement and consumption
+    
+    if(n_ads == 0){
+      ad = 0
+      
+      swb = 0.5 * agent$set_level[1] + # set level happiness
+        0.1 * agent$circumstance[1] + # set level circumstances - varying?
+        0.4 * max_mat_infl * ad_con_split * 1 / (1 + exp(-swb_c)) + # influence of consumption on SWB
+        0.4 * max_mat_infl * (1 - ad_con_split) * rbeta(1, 5, 5) + # no ads, no effect of ads thus random
+        0.4 * (1 - max_mat_infl) * rbeta(1, 5, 5) # random factor - life's influence on SWB
+    } else{
+      ad = sample(1:n_prods, n_ads) # What ads does an agent see?
+      infl_ad = ifelse(ad %in% agent$pp, 1, -1) * # does the agent have the object advertised for or not?
+        0.2533 * m # by how much is the agent influenced? 
+      infl_ad = sum(infl_ad)
+      
+      swb = 0.5 * agent$set_level[1] + # set level happiness
+        0.1 * agent$circumstance[1] + # set level circumstances - varying?
+        0.4 * max_mat_infl * ad_con_split * 1 / (1 + exp(-swb_c)) + # influence of consumption on SWB
+        0.4 * max_mat_infl * (1 - ad_con_split) * 1 / (1 + exp(-infl_ad)) + # factor from advertisement
+        0.4 * (1 - max_mat_infl) * rbeta(1, 5, 5) # random factor - life's influence on SWB
+    }
+    
+    round = i
+    
+    agent[i,] <- c(
+      m,
+      income,
+      w,
+      c,
+      pp,
+      swb,
+      AL,
+      ID,
+      agent$set_level[1],
+      agent$circumstance[1],
+      round,
+      swb_c,
+      ad = 0,
+      n_prods,
+      si = 0
+    )
+    
+    agent$ad[i] <- paste(ad, collapse = ',')
+    
+    world[[j]] <- agent
+    
+  }
+  
+  MI6 <- randomPairs(1:length(world)) # defining agent meeting
+  
+  # social interaction
+  for(k in 1:(n_agents/2)){
+    meeting <- MI6[k,]
+    agent1 <- world[[meeting$mix]]
+    agent2 <- world[[meeting$match]]
+
+    a1_n_pp = sum(ifelse(agent1$pp == 0, 0, 1))
+    a2_n_pp = sum(ifelse(agent2$pp == 0, 0, 1))
+
+    perc1 <-
+      (1 - agent1$materialism[1]) * (agent1$swb[i] - agent2$swb[i]) +
+      agent1$materialism[1] *
+      (0.5 * ((agent1$wealth[i] - agent2$wealth[i])/mean(agent1$wealth[i] + agent2$wealth[i])) +
+        0.5 * ((a1_n_pp - a2_n_pp)/mean(a1_n_pp + a2_n_pp)))
+
+    perc2 <-
+      (1 - agent2$materialism[1]) * (agent2$swb[i] - agent1$swb[i]) +
+      agent2$materialism[1] *
+      (0.5 * ((agent2$wealth[i] - agent1$wealth[i])/mean(agent2$wealth[i] + agent1$wealth[i])) +
+        0.5 * ((a2_n_pp - a1_n_pp)/mean(a2_n_pp + a1_n_pp)))
+
+    agent1$si[i] <- perc1
+    agent2$si[i] <- perc2
+    
+    world[[meeting$mix]] <- agent1
+    world[[meeting$match]] <- agent2
+  }
+  
+}
+
+```
+
+
+```{r data formatting}
+d <- data.frame(
+    materialism = NA,
+    income = NA, 
+    wealth = NA, 
+    consumption = NA, 
+    pp = NA,
+    swb = NA, 
+    AL = NA,
+    ID = NA,
+    set_level = NA,
+    circumstance = NA,
+    round = NA,
+    swb_c = NA,
+    ad = NA,
+    n_prods = NA,
+    si = NA
+)
+
+for(i in 1:length(world)){
+  d = rbind(d, world[[i]][rounds,])
+}
+
+d <- d %>% 
+  na.omit() %>% 
+  mutate(ID = as.factor(ID),
+         round = round - 1)
+```
+
+
+```{r control graphs}
+d %>% ggplot(aes(x = round, y = swb)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = round, y = si, color = ID)) +
+  geom_line()
+
+d %>% ggplot(aes(x = materialism, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
+  geom_jitter(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, y = swb)) +
+  geom_jitter(alpha = 0.3, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = income, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = income, y = swb)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

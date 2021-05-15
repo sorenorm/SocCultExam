@@ -45,12 +45,10 @@ create.agent <- function(input) {
 ```
 
 ```{r simulating rounds}
-rounds = 2:2001
-n_agents = 1
+rounds = 2:401
+n_agents = 50
 
 br_c = 9000
-
-n_prods = 1000
 ad_xrate = 1
 
 world <- lapply(rep(1:n_agents, 1), create.agent)
@@ -58,6 +56,7 @@ world <- lapply(rep(1:n_agents, 1), create.agent)
 for(j in 1:n_agents) {
   agent <- world[[j]]
   agent$ID[1] <- j
+  n_prods = 1000
   for (i in rounds) {
     ID <- agent$ID[1]
     m = agent$materialism[1] # constant materialism level
@@ -78,17 +77,31 @@ for(j in 1:n_agents) {
     
     ## influence of ad exposure on SWB
     n_ads = rpois(1, ad_xrate)
-    ad = sample(1:n_prods, n_ads) # What ads does an agent see?
-    ad = ifelse(n_ads == 0, 0, ad) # if sample is empty, then ad = 0
     pp = ifelse(c == 0, 0, sample(1:n_prods, 1)) # What products does an agent have
     
-    infl_ad = ifelse(ad != 0 & ad %in% agent$pp, 1, 0)
+    max_mat_infl = rbeta(1, 10 * m, 10 * (1 - m)) # max influence of materialistic concepts on SWB
+    ad_con_split = rbeta(1,5,5) # the split influence of advertisement and consumption
     
-    
-    swb = 0.5 * agent$set_level[1] + # set level happiness
-      0.1 * agent$circumstance[1] + # c
-      0.4 * m * inv_logit(swb_c) +
-      0.4 * (1-m) * rbeta(1,5,5)
+    if(n_ads == 0){
+      ad = 0
+      
+      swb = 0.5 * agent$set_level[1] + # set level happiness
+        0.1 * agent$circumstance[1] + # set level circumstances - varying?
+        0.4 * max_mat_infl * ad_con_split * 1 / (1 + exp(-swb_c)) + # influence of consumption on SWB
+        0.4 * max_mat_infl * (1 - ad_con_split) * rbeta(1, 5, 5) + # no ads, no effect of ads thus random
+        0.4 * (1 - max_mat_infl) * rbeta(1, 5, 5) # random factor - life's influence on SWB
+    } else{
+      ad = sample(1:n_prods, n_ads) # What ads does an agent see?
+      infl_ad = ifelse(ad %in% agent$pp, 1, -1) * # does the agent have the object advertised for or not?
+        0.2533 * m # by how much is the agent influenced? 
+      infl_ad = sum(infl_ad)
+      
+      swb = 0.5 * agent$set_level[1] + # set level happiness
+        0.1 * agent$circumstance[1] + # set level circumstances - varying?
+        0.4 * max_mat_infl * ad_con_split * 1 / (1 + exp(-swb_c)) + # influence of consumption on SWB
+        0.4 * max_mat_infl * (1 - ad_con_split) * 1 / (1 + exp(-infl_ad)) + # factor from advertisement
+        0.4 * (1 - max_mat_infl) * rbeta(1, 5, 5) # random factor - life's influence on SWB
+    }
     
     round = i
     
@@ -115,8 +128,6 @@ for(j in 1:n_agents) {
   #print(j)
 }
 
-agent$pp == 761
-agent$pp
 ```
 
 
@@ -178,7 +189,7 @@ d %>% ggplot(aes(x = wealth, y = swb, color = ID)) +
 d %>% ggplot(aes(x = round, y = wealth, color = ID)) +
   geom_line()
 
-d %>% ggplot(aes(x = consumption, y = swb - set_level - circumstance, color = ID)) +
+d %>% ggplot(aes(x = consumption, y = swb - 0.5 * set_level - 0.1 * circumstance, color = ID)) +
   geom_jitter(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
@@ -186,7 +197,7 @@ d %>% ggplot(aes(x = consumption, y = swb, color = ID)) +
   geom_jitter(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
-d %>% ggplot(aes(x = materialism, y = swb - set_level - circumstance)) +
+d %>% ggplot(aes(x = materialism, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
   geom_jitter(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
@@ -203,7 +214,7 @@ d %>% ggplot(aes(x = round, y = swb_c, color = ID)) +
 d %>% ggplot(aes(x = round, y = inv_logit(swb_c), color = ID)) +
   geom_line(alpha = 0.7)
 
-d %>% ggplot(aes(x = scale(income), y = swb - set_level - circumstance)) +
+d %>% ggplot(aes(x = scale(income), y = swb - 0.5 * set_level - 0.1 * circumstance)) +
   geom_point(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
@@ -211,13 +222,55 @@ d %>% ggplot(aes(x = scale(income), y = swb)) +
   geom_point(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
+d %>% ggplot(aes(x = round, y = swb)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+```
+```{r}
+d %>% mutate(ID = as.factor(ID),
+             ID = fct_reorder(ID, materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = swb,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  geom_errorbar(aes(ymin =  0.5 * set_level + 0.1 * circumstance, 
+                    ymax =  0.5 * set_level + 0.1 * circumstance + 0.4), 
+                width = .2) +
+  scale_color_gradient2(midpoint=mean(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") + 
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange", shape = 3)
+
+d %>% mutate(ID = as.factor(ID),
+             ID = fct_reorder(ID, materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+         color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=mean(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+  
+
+
 ```
 
 
 ```{r correlation tests}
-cor.test(d$materialism, d$swb - d$set_level - d$circumstance)
 
-cor.test(d$wealth, d$swb - d$set_level - d$circumstance)
+cor.test(d$materialism, d$swb - 0.4 * d$set_level - 0.1 * d$circumstance)
+
+cor.test(d$wealth, d$swb - 0.4 * d$set_level - 0.1 * d$circumstance)
 
 cor.test(d$materialism, d$swb)
 
