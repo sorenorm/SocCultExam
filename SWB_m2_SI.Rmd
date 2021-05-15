@@ -20,16 +20,14 @@ theme_set(theme_minimal())
 ```{r}
 create.agent <- function(input) {
   income = sample(10000:100000, 1)
-  set_level = rbeta(1, 5, 5)
+  set_level =  rbeta(1, 5, 5)
   circumstance = rbeta(1, 5, 5)
   
   agent <- data.frame(
-    materialism = rbeta(1, 5, 5), # fixed materialism values
+    materialism = sample(1:1e6,1)/1e6, # fixed materialism values
     income = income, # fixed income randomly assigned
     wealth = income * 3, # wealth at round 0
     consumption = 0, # consumption at round 0
-    # social_consumption = consumption *
-    # materistic_consumption = 1 - social_consumption
     pp = 0, # personal property at round 0
     swb = NA,
     AL = 0,
@@ -53,26 +51,22 @@ randomPairs <- function(list) {
 ```
 
 
-
-
 ```{r simulating rounds}
 rounds = 2:101
-n_agents = 10
-
+n_agents = 100
 br_c = 9000
 ad_xrate = 1
+lr = 0.1
 
 world <- lapply(rep(1:n_agents, 1), create.agent)
-
 
 for(i in rounds){
   for(j in 1:n_agents){
     agent <- world[[j]]
-    agent$ID[1] <- j
     n_prods = agent$n_prods[i-1]
   
-    ID <- agent$ID[1]
-    m = agent$materialism[1] # constant materialism level
+    ID <- j
+    m = agent$materialism[i-1] # constant materialism level
     income = agent$income[1] # constant income level
     w = agent$wealth[i - 1] # wealth from previous round
     
@@ -101,8 +95,8 @@ for(i in rounds){
       swb = 0.5 * agent$set_level[1] + # set level happiness
         0.1 * agent$circumstance[1] + # set level circumstances - varying?
         0.4 * max_mat_infl * ad_con_split * 1 / (1 + exp(-swb_c)) + # influence of consumption on SWB
-        0.4 * max_mat_infl * (1 - ad_con_split) * rbeta(1, 5, 5) + # no ads, no effect of ads thus random
-        0.4 * (1 - max_mat_infl) * rbeta(1, 5, 5) # random factor - life's influence on SWB
+        0.4 * (max_mat_infl * (1 - ad_con_split) + (1 - max_mat_infl)) * 
+        rbeta(1, 5, 5) # no ads, no effect of ads thus random
     } else{
       ad = sample(1:n_prods, n_ads) # What ads does an agent see?
       infl_ad = ifelse(ad %in% agent$pp, 1, -1) * # does the agent have the object advertised for or not?
@@ -139,12 +133,11 @@ for(i in rounds){
     agent$ad[i] <- paste(ad, collapse = ',')
     
     world[[j]] <- agent
-    
   }
   
   MI6 <- randomPairs(1:length(world)) # defining agent meeting
   
-  # social interaction
+  ## social interaction
   for(k in 1:(n_agents/2)){
     meeting <- MI6[k,]
     agent1 <- world[[meeting$mix]]
@@ -152,24 +145,59 @@ for(i in rounds){
 
     a1_n_pp = sum(ifelse(agent1$pp == 0, 0, 1))
     a2_n_pp = sum(ifelse(agent2$pp == 0, 0, 1))
+    
+    if (a1_n_pp + a1_n_pp == 0) {
+      perc1 <-
+        (1 - agent1$materialism[i]) * (agent1$swb[i] - agent2$swb[i]) +
+        agent1$materialism[i] *
+        (0.5 * ((agent1$wealth[i - 1] - agent2$wealth[i]) / mean(agent1$wealth[i] + agent2$wealth[i])) +
+          0.5 * 1)
+      
+      perc2 <-
+        (1 - agent2$materialism[i]) * (agent2$swb[i] - agent1$swb[i]) +
+        agent2$materialism[i] *
+        (0.5 * ((agent2$wealth[i] - agent1$wealth[i]) / mean(agent2$wealth[i] + agent1$wealth[i])) + 
+           0.5 * 1)
+    
+    } else{
+      perc1 <-
+        (1 - agent1$materialism[i]) * (agent1$swb[i] - agent2$swb[i]) +
+        agent1$materialism[i] *
+        (0.5 * ((agent1$wealth[i - 1] - agent2$wealth[i]) / mean(agent1$wealth[i] + agent2$wealth[i])
+        ) +
+          0.5 * ((a1_n_pp - a2_n_pp) / mean(a1_n_pp + a2_n_pp)))
+      
+      perc2 <-
+        (1 - agent2$materialism[i]) * (agent2$swb[i] - agent1$swb[i]) +
+        agent2$materialism[i] *
+        (0.5 * ((agent2$wealth[i] - agent1$wealth[i]) / mean(agent2$wealth[i] + agent1$wealth[i])
+        ) +
+          0.5 * ((a2_n_pp - a1_n_pp) / mean(a2_n_pp + a1_n_pp)))
+      
+    }
 
-    perc1 <-
-      (1 - agent1$materialism[1]) * (agent1$swb[i] - agent2$swb[i]) +
-      agent1$materialism[1] *
-      (0.5 * ((agent1$wealth[i] - agent2$wealth[i])/mean(agent1$wealth[i] + agent2$wealth[i])) +
-        0.5 * ((a1_n_pp - a2_n_pp)/mean(a1_n_pp + a2_n_pp)))
+    m_a1 <- ifelse(
+      perc1 < 0,
+      agent1$materialism[i] + (agent2$materialism[i] - agent1$materialism[i]) * lr,
+      agent1$materialism[i]
+    )
 
-    perc2 <-
-      (1 - agent2$materialism[1]) * (agent2$swb[i] - agent1$swb[i]) +
-      agent2$materialism[1] *
-      (0.5 * ((agent2$wealth[i] - agent1$wealth[i])/mean(agent2$wealth[i] + agent1$wealth[i])) +
-        0.5 * ((a2_n_pp - a1_n_pp)/mean(a2_n_pp + a1_n_pp)))
+    m_a2 <- ifelse(
+      perc2 < 0,
+      agent2$materialism[i] + (agent1$materialism[i] - agent2$materialism[i]) * lr,
+      agent2$materialism[i]
+    )
+
+
+    agent1$materialism[i] <- m_a1
+    agent2$materialism[i] <- m_a2
 
     agent1$si[i] <- perc1
     agent2$si[i] <- perc2
-    
+
     world[[meeting$mix]] <- agent1
     world[[meeting$match]] <- agent2
+    
   }
   
 }
@@ -200,17 +228,22 @@ for(i in 1:length(world)){
   d = rbind(d, world[[i]][rounds,])
 }
 
+sum(is.na(d$si))
+
 d <- d %>% 
   na.omit() %>% 
   mutate(ID = as.factor(ID),
          round = round - 1)
+
 ```
 
 
 ```{r control graphs}
-d %>% ggplot(aes(x = round, y = swb)) +
-  geom_point(alpha = 0.2, shape = 1) +
-  geom_smooth(method = 'lm')
+d %>% ggplot(aes(x = round, y = swb, color = ID)) +
+  geom_point(alpha = 0.2, shape = 1) 
+
+d %>% ggplot(aes(x = round, y = materialism, color = ID)) +
+  geom_line()
 
 d %>% ggplot(aes(x = round, y = si, color = ID)) +
   geom_line()
@@ -223,19 +256,28 @@ d %>% ggplot(aes(x = materialism, y = swb)) +
   geom_jitter(alpha = 0.3, shape = 1) +
   geom_smooth(method = 'lm')
 
-d %>% ggplot(aes(x = income, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
+d %>% ggplot(aes(x = wealth, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
   geom_point(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
 
-d %>% ggplot(aes(x = income, y = swb)) +
+d %>% ggplot(aes(x = wealth, y = swb)) +
   geom_point(alpha = 0.2, shape = 1) +
   geom_smooth(method = 'lm')
-
-
 
 ```
 
+```{r correlation tests}
 
+cor.test(d$materialism, d$swb - 0.4 * d$set_level - 0.1 * d$circumstance)
+
+cor.test(d$wealth, d$swb - 0.4 * d$set_level - 0.1 * d$circumstance)
+
+cor.test(d$materialism, d$swb)
+
+cor.test(d$wealth, d$swb)
+
+
+```
 
 
 
