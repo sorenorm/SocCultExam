@@ -11,7 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 pacman::p_load(tidyverse, 
                rethinking,
                zoo,
-               naniar)
+               naniar,
+               lme4)
 
 theme_set(theme_minimal())
 
@@ -55,8 +56,8 @@ randomPairs <- function(list) {
 
 
 ```{r simulating rounds}
-rounds = 2:201
-n_agents = 20
+rounds = 2:1001
+n_agents = 100
 br_c = 9000
 ad_xrate = 1
 lr = 0.05
@@ -317,6 +318,52 @@ cor.test(d$wealth, d$swb)
 
 ```
 
+```{r}
+m1 <- lmer(data = d, swb ~ materialism + (1|ID))
+
+m2 <- lmer(data = d, 
+           swb ~ materialism + set_level + circumstance + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m3 <- lmer(data = d, 
+           swb ~ materialism + scale(wealth) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m4 <- lmer(data = d, 
+           swb ~ materialism + (1|ID) + (1|income),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m5 <- lmer(data = d, 
+           swb ~ materialism + scale(income) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m6 <- lmer(data = d, 
+           swb ~ materialism*scale(wealth) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m7 <- lmer(data = d, 
+           swb ~ materialism*scale(income) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m8 <- lmer(data = d, 
+           swb ~ materialism*scale(income)*scale(wealth) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m9 <- lmer(data = d, 
+           swb5 ~ materialism + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m1
+m2 # is singular
+m3
+m4
+m5
+m6
+m7
+m8
+summary(m9)
+
+```
 
 
 
