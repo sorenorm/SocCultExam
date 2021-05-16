@@ -16,6 +16,11 @@ pacman::p_load(tidyverse,
 
 theme_set(theme_minimal())
 
+x = seq(0, 1, by = 0.01)
+y =  x/(1+exp(-x))
+  
+data.frame(x , y) %>% plot()
+
 ```
 
 ```{r}
@@ -31,7 +36,7 @@ create.agent <- function(input) {
     consumption = 0, # consumption at round 0
     pp = 0, # personal property at round 0
     swb = NA,
-    AL = 0,
+    AL_c = 0,
     ID = NA,
     set_level = set_level, # unchanging factor from genetics etc.
     circumstance =  circumstance, # largely unchanged circumstances and demographic factor
@@ -42,7 +47,9 @@ create.agent <- function(input) {
     si = NA,
     swb5 = NA,
     pp5 = NA,
-    w5 = NA
+    w5 = NA,
+    AL_swb = 0,
+    swb_AL = NA
   )
 }
 
@@ -56,11 +63,12 @@ randomPairs <- function(list) {
 
 
 ```{r simulating rounds}
-rounds = 2:1001
-n_agents = 100
+rounds = 2:10001
+n_agents = 50
 br_c = 9000
 ad_xrate = 1
 lr = 0.05
+dynamic_consumption = 0.01
 
 compare = 10
 
@@ -84,9 +92,9 @@ for(i in rounds){
     w = disposible_w - c # wealth after consumption
     n_prods = ifelse(c == 0, n_prods, n_prods + 1) # market diversity expanding as a response to products being consumed
     
-    AL = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c # AL at round i
-    AL_lack = agent$AL[i - 1] # AL at round i - 1
-    swb_c = ifelse(AL_lack == 0, 0, (AL - AL_lack)/((AL + AL_lack)/2)) # Relative AL
+    AL_c = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c # AL at round i
+    AL_c_lack = agent$AL_c[i - 1] # AL at round i - 1
+    swb_c = ifelse(AL_c_lack == 0, 0, (AL_c - AL_c_lack)/(mean(AL_c + AL_c_lack, rm.na = T))) # Relative AL
     
     ## influence of ad exposure on SWB
     n_ads = rpois(1, ad_xrate)
@@ -116,6 +124,13 @@ for(i in rounds){
         0.4 * (1 - max_mat_infl) * rbeta(1, 5, 5) # random factor - life's influence on SWB
     }
     
+    AL_swb = sum(agent$swb / sort((agent$round + 1), decreasing = T), na.rm = T) + swb # AL at round i
+    AL_swb_lack = agent$AL_swb[i - 1] # AL at round i - 1
+    swb_AL = ifelse(AL_swb_lack == 0, 0, (AL_swb - AL_swb_lack)/mean(AL_swb + AL_swb_lack, rm.na = T)) # Relative AL
+    
+    dynamic_consumption = ifelse(i < 25, dynamic_consumption, swb_AL)
+    m = ifelse(c == 0, m - m * dynamic_consumption, m + (1 - m) * dynamic_consumption)
+    
     round = i
     
     agent[i,] <- c(
@@ -125,7 +140,7 @@ for(i in rounds){
       c,
       pp,
       swb,
-      AL,
+      AL_c,
       ID,
       agent$set_level[1],
       agent$circumstance[1],
@@ -136,7 +151,9 @@ for(i in rounds){
       si = 0,
       swb5 = 0,
       pp5 = 0,
-      w5 = 0
+      w5 = 0,
+      AL_swb,
+      swb_AL
     )
     
     
@@ -173,28 +190,28 @@ for(i in rounds){
         perc1 <-
           (1 - agent1$materialism[i]) * (agent1$swb5[i] - agent2$swb5[i]) +
           agent1$materialism[i] *
-          (0.5 * ((agent1$w5[i] - agent2$w5[i]) / mean(agent1$w5[i] + agent2$w5[i])) +
+          (0.5 * ((agent1$w5[i] - agent2$w5[i]) / mean(agent1$w5[i] + agent2$w5[i], rm.na = T)) +
              0.5 * 1)
         
         perc2 <-
           (1 - agent2$materialism[i]) * (agent2$swb5[i] - agent1$swb5[i]) +
           agent2$materialism[i] *
-          (0.5 * ((agent2$w5[i] - agent1$w5[i]) / mean(agent2$w5[i] + agent1$w5[i])) +
+          (0.5 * ((agent2$w5[i] - agent1$w5[i]) / mean(agent2$w5[i] + agent1$w5[i], rm.na = T)) +
              0.5 * 1)
         
       } else{
         perc1 <-
           (1 - agent1$materialism[i]) * (agent1$swb5[i] - agent2$swb5[i]) +
           agent1$materialism[i] *
-          (0.5 * ((agent1$w5[i] - agent2$w5[i]) / mean(agent1$w5[i] + agent2$w5[i])) +
-             0.5 * ((agent1$pp5[i] - agent2$pp5[i]) / mean(agent1$pp5[i] + agent2$pp5[i])
+          (0.5 * ((agent1$w5[i] - agent2$w5[i]) / mean(agent1$w5[i] + agent2$w5[i], rm.na = T)) +
+             0.5 * ((agent1$pp5[i] - agent2$pp5[i]) / mean(agent1$pp5[i] + agent2$pp5[i], rm.na = T)
              ))
         
         perc2 <-
           (1 - agent2$materialism[i]) * (agent2$swb5[i] - agent1$swb5[i]) +
           agent2$materialism[i] *
-          (0.5 * ((agent2$w5[i] - agent1$w5[i]) / mean(agent2$w5[i] + agent1$w5[i])) +
-             0.5 * ((agent2$pp5[i] - agent1$pp5[i]) / mean(agent2$pp5[i] + agent1$pp5[i])
+          (0.5 * ((agent2$w5[i] - agent1$w5[i]) / mean(agent2$w5[i] + agent1$w5[i], rm.na = T)) +
+             0.5 * ((agent2$pp5[i] - agent1$pp5[i]) / mean(agent2$pp5[i] + agent1$pp5[i], rm.na = T)
              ))
         
       }
@@ -223,6 +240,7 @@ for(i in rounds){
       
     }
   }
+  if (i %% 100 == 0){print(i)}
 }
 
 ```
@@ -236,7 +254,7 @@ d <- data.frame(
     consumption = NA, 
     pp = NA,
     swb = NA, 
-    AL = NA,
+    AL_c = NA,
     ID = NA,
     set_level = NA,
     circumstance = NA,
@@ -247,7 +265,9 @@ d <- data.frame(
     si = NA,
     swb5 = NA,
     pp5 = NA,
-    w5 = NA
+    w5 = NA,
+    AL_swb = NA,
+    swb_AL = NA
 )
 
 for(i in 1:length(world)){
@@ -274,34 +294,68 @@ d %>% filter(ID == 5) %>%
 
 ```
 
+```{r control graphs materialism}
+d %>% ggplot(aes(x = round, y = materialism, color = ID)) +
+  geom_line()
 
+d %>% ggplot(aes(x = materialism, 
+                 y = swb - 0.5 * set_level - 0.1 * circumstance)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb5 - 0.5 * set_level - 0.1 * circumstance)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb - 0.5 * set_level - 0.1 * circumstance,
+                 color = ID)) +
+  geom_point(alpha = 0.5, shape = 1) 
+
+d %>% ggplot(aes(x = materialism, y = swb)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, y = swb5)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb5,
+                 color = ID)) +
+  geom_point(alpha = 0.2, shape = 1) 
+```
 
 
 ```{r control graphs}
-d %>% ggplot(aes(x = round, y = swb5, color = ID)) +
-  geom_point(alpha = 0.2, shape = 1) 
-
-d %>% ggplot(aes(x = round, y = materialism, color = ID)) +
-  geom_line()
+d %>% ggplot(aes(x = round, 
+                 y = swb5, 
+                 color = ID)) +
+  geom_line(alpha = 0.8, 
+            shape = 1) 
 
 d %>% ggplot(aes(x = round, y = si, color = ID)) +
   geom_line()
 
-d %>% ggplot(aes(x = materialism, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
-  geom_jitter(alpha = 0.2, shape = 1) +
-  geom_smooth(method = 'lm')
+d %>% ggplot(aes(x = log(w5), 
+                 y = swb5 - 0.5 * set_level - 0.1 * circumstance,
+                 color = ID)) +
+  geom_point(alpha = 0.4, 
+             shape = 1)
 
-d %>% ggplot(aes(x = materialism, y = swb)) +
-  geom_jitter(alpha = 0.3, shape = 1) +
-  geom_smooth(method = 'lm')
+d %>% ggplot(aes(x = w5, 
+                 y = swb5,
+                 color = ID)) +
+  geom_point(alpha = 0.2, 
+             shape = 1)
 
-d %>% ggplot(aes(x = wealth, y = swb - 0.5 * set_level - 0.1 * circumstance)) +
-  geom_point(alpha = 0.2, shape = 1) +
-  geom_smooth(method = 'lm')
+d %>% ggplot(aes(x = round, 
+                 y = swb_AL, 
+                 color = ID)) +
+  geom_line(alpha = 0.8, 
+            shape = 1) 
 
-d %>% ggplot(aes(x = wealth, y = swb)) +
-  geom_point(alpha = 0.2, shape = 1) +
-  geom_smooth(method = 'lm')
 
 ```
 
@@ -322,7 +376,7 @@ cor.test(d$wealth, d$swb)
 m1 <- lmer(data = d, swb ~ materialism + (1|ID))
 
 m2 <- lmer(data = d, 
-           swb ~ materialism + set_level + circumstance + (1|ID),
+           swb5 ~ materialism + set_level + circumstance + (1|ID),
            control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
 
 m3 <- lmer(data = d, 
@@ -353,8 +407,10 @@ m9 <- lmer(data = d,
            swb5 ~ materialism + (1|ID),
            control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
 
+lm(data = d, materialism ~ scale(round))
+
 m1
-m2 # is singular
+m2 # swb5
 m3
 m4
 m5
