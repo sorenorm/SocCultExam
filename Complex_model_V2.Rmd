@@ -28,29 +28,103 @@ create.agent <- function(input) {
   income = sample(10000:100000, 1)
   set_level =  rbeta(1, 5, 5)
   circumstance = rbeta(1, 5, 5)
+  materialism = sample(1:1e6,1)/1e6
+  c = replicate(5, rbinom(1, 1, materialism))
+  n_prods = 1000
+  pp = replicate(5, sample(1:n_prods, 1)) * c
+  spending = c * rbeta(5, 10 * materialism, 10 * (1 - materialism))
+  
+  wealth = c()
+  consumption <- c()
+  AL_c_store = c()
+  swb_c_store = c()
+  
+  swb_store = c()
+  AL_swb_store = c()
+  swb_AL_store = c()
+  
+  swb5 = c()
+  w5 = c()
+  pp5 = c()
+  for(i in 1:5){
+    w = wealth[i-1]
+    con_i = ifelse(i == 1,
+                   spending[i] * (income * 3 - br_c + income),
+                   spending[i] * (w - br_c + income))
+    consumption = c(consumption, con_i)
+    
+    w_i = ifelse(i == 1,
+                    income * 3 - br_c + income - con_i,
+                    w - br_c + income - consumption[i])
+    wealth = c(wealth, w_i)
+    
+    c(wealth, w_i)
+    AL_c = sum(consumption / sort( 1:i, decreasing = T)) 
+    AL_c_store = c(AL_c_store, AL_c)
+    AL_c_lack = ifelse(i==1, 
+                       0,
+                       AL_c_store[i - 1])
+    swb_c = ifelse(AL_c_lack + AL_c == 0, 
+                   AL_c - AL_c_lack, 
+                   (AL_c - AL_c_lack)/(mean(c(AL_c, AL_c_lack), rm.na = T)))
+    swb_c_store = c(swb_c_store, swb_c)
+    
+    swb = 0.5 * set_level + 0.1 * circumstance + 0.4 * rbeta(1, 50, 50)
+    swb_store = c(swb_store, swb)
+    
+    n_prods_new = ifelse(c[i] == 0, n_prods, n_prods + 1)
+    n_prods = ifelse(i== 1,
+                     n_prods_new,
+                     c(n_prods, n_prods_new))
+    
+    AL_swb = sum(swb / sort(1:i, decreasing = T), na.rm = T)
+    AL_swb_store = c(AL_swb_store, AL_swb)
+    AL_swb_lack = ifelse(i==1, 
+                       0,
+                       swb_store[i - 1])
+    
+    swb_AL = ifelse(AL_swb_lack + AL_swb == 0,
+                    AL_swb_lack + AL_sw,
+                    (AL_swb - AL_swb_lack)/mean(c(AL_swb, AL_swb_lack), rm.na = T))
+    
+    swb_AL_store = c(swb_AL_store, swb_AL)
+    
+    swb5_i = ifelse(i==1,
+                  swb,
+                  mean(c(swb5, swb)))
+    swb5 = c(swb5,swb5_i)
+    
+    w5_i = ifelse(i==1,
+                wealth[i], 
+                mean(c(w5, wealth[i])))
+    w5 = c(w5, w5_i)
+    
+    pp5_i = mean(c[1:i])
+    pp5 = c(pp5, pp5_i)
+  }
   
   agent <- data.frame(
-    materialism = sample(1:1e6,1)/1e6, # fixed materialism values
-    income = income, # fixed income randomly assigned
-    wealth = income * 3, # wealth at round 0
-    consumption = 0, # consumption at round 0
-    pp = 0, # personal property at round 0
-    swb = NA,
-    AL_c = 0,
-    ID = NA,
-    set_level = set_level, # unchanging factor from genetics etc.
-    circumstance =  circumstance, # largely unchanged circumstances and demographic factor
-    round = 1,
-    swb_c = NA,
-    ad = 0,
-    n_prods = 1000,
-    si = NA,
-    swb5 = NA,
-    pp5 = NA,
-    w5 = NA,
-    AL_swb = 0,
-    swb_AL = NA,
-    ad_swb = NA
+    materialism = rep(materialism, 5),
+    income = rep(income, 5), 
+    wealth = wealth, 
+    consumption = consumption, 
+    pp = pp, 
+    swb = swb_store,
+    AL_c = AL_c_store,
+    ID = rep(NA, 5),
+    set_level = rep(set_level, 5), # unchanging factor from genetics etc.
+    circumstance =  rep(circumstance, 5), # largely unchanged circumstances and demographic factor
+    round = 1:5,
+    swb_c = swb_c_store,
+    ad = rep(0,5),
+    n_prods = n_prods,
+    si = rep(0, 5),
+    swb5 = swb5,
+    pp5 = pp5,
+    w5 = w5,
+    AL_swb = AL_swb_store,
+    swb_AL = swb_AL_store,
+    ad_swb = rep(0,5)
   )
 }
 
@@ -64,11 +138,11 @@ randomPairs <- function(list) {
 
 
 ```{r simulating rounds}
-rounds = 2:101
-n_agents = 20
+rounds = 1e3 + 5
+n_agents = 100
 br_c = 9000
 ad_xrate = 1
-lr = 0.05
+lr = 0.005
 ad_factor = 0.5
 dynamic_consumption = 0.01
 
@@ -79,7 +153,7 @@ world <- lapply(rep(1:n_agents, 1), create.agent)
 # i = 2
 # j = 1
 
-for(i in rounds){
+for(i in 6:rounds){
   for(j in 1:n_agents){
     agent <- world[[j]]
     n_prods = agent$n_prods[i-1]
@@ -152,8 +226,8 @@ for(i in rounds){
       swb5 = 0,
       pp5 = 0,
       w5 = 0,
-      AL_swb,
-      swb_AL,
+      AL_swb = 0,
+      swb_AL = 0,
       ad_swb
     )
     
@@ -161,9 +235,9 @@ for(i in rounds){
     agent$ad[i] <- paste(ad, collapse = ',')
     
     if(i <= (compare + 1)){
-      agent$swb5[i] = sum(agent$swb, na.rm = T)/(i-1)
-      agent$pp5[i] = sum(ifelse(agent$pp == 0, 0, 1), na.rm = T)/(i-1)
-      agent$w5[i] = sum(agent$wealth, na.rm = T)/(i-1)
+      agent$swb5[i] = sum(agent$swb, na.rm = T)/(i)
+      agent$pp5[i] = sum(ifelse(agent$pp == 0, 0, 1), na.rm = T)/(i)
+      agent$w5[i] = sum(agent$wealth, na.rm = T)/(i)
     }
     if(i > (compare + 1)) {
       agent$swb5[i] = sum(agent$swb[(i-(compare-1)):i], na.rm = T)/compare
@@ -176,7 +250,9 @@ for(i in rounds){
     swb_AL = ifelse(AL_swb_lack + AL_swb == 0,
                     AL_swb_lack + AL_sw,
                     (AL_swb - AL_swb_lack)/mean(c(AL_swb, AL_swb_lack), rm.na = T)) # Relative AL
-
+    
+    agent$AL_swb[i] <- AL_swb
+    agent$swb_AL[i] <- swb_AL
     
     agent$materialism[i] = ifelse(c == 0, 
                                   m - m * inv_logit(swb_AL)/100, 
@@ -279,14 +355,25 @@ d <- data.frame(
     ad_swb = NA
 )
 
+# for(i in 1:length(world)){
+#   world[[i]]$ID = i
+#   d = rbind(d, world[[i]])
+# }
+
 for(i in 1:length(world)){
-  d = rbind(d, world[[i]][rounds,])
+  d = rbind(d, world[[i]][1:rounds,])
 }
 
-d <- d %>% 
-  na.omit() %>% 
+#d$ID <- na.locf0(d$ID, fromLast = T)
+
+# d <- d %>% 
+#   na.omit() %>% 
+#   mutate(ID = as.factor(ID))
+
+d <- d %>%
+  na.omit() %>%
   mutate(ID = as.factor(ID),
-         round = round - 1)
+         round = round - 5)
 
 ```
 
@@ -322,6 +409,10 @@ d %>% filter(ID == 1:5) %>%
 ```{r control graphs materialism}
 d %>% ggplot(aes(x = round, y = materialism, color = ID)) +
   geom_line()
+
+d %>% filter(round %in% c(1,500)) %>% ggplot(aes(x = round, y = materialism, color = ID)) +
+  geom_line()
+
 
 d %>% ggplot(aes(x = materialism, 
                  y = swb - 0.5 * set_level - 0.1 * circumstance)) +
@@ -412,7 +503,7 @@ d %>% mutate(ID_n = as.numeric(ID),
   ggplot(aes(x = ID, 
              y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
              color = materialism)) +
-  geom_point(alpha = 0.5, shape = 1) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
   stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
                  geom="point", color="orange",
                shape = 3) +
