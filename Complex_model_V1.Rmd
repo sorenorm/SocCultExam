@@ -17,7 +17,7 @@ pacman::p_load(tidyverse,
 theme_set(theme_minimal())
 
 x = seq(0, 10, by = 1)
-y =  1 - 1/2^x
+y =  1 - 1/2^(0.5*x)
   
 data.frame(x , y) %>% plot()
 
@@ -49,7 +49,8 @@ create.agent <- function(input) {
     pp5 = NA,
     w5 = NA,
     AL_swb = 0,
-    swb_AL = NA
+    swb_AL = NA,
+    ad_swb = NA
   )
 }
 
@@ -63,11 +64,12 @@ randomPairs <- function(list) {
 
 
 ```{r simulating rounds}
-rounds = 2:201
-n_agents = 50
+rounds = 2:101
+n_agents = 20
 br_c = 9000
 ad_xrate = 1
-lr = 0.01
+lr = 0.05
+ad_factor = 0.5
 dynamic_consumption = 0.01
 
 compare = 10
@@ -98,15 +100,17 @@ for(i in rounds){
     
     AL_c = sum(agent$consumption / sort((agent$round + 1), decreasing = T)) + c # AL at round i
     AL_c_lack = agent$AL_c[i - 1] # AL at round i - 1
-    swb_c = ifelse(AL_c_lack == 0, 0, (AL_c - AL_c_lack)/(mean(c(AL_c, AL_c_lack), rm.na = T))) # Relative AL
+    swb_c = ifelse(AL_c_lack + AL_c == 0, 
+                   AL_c - AL_c_lack, 
+                   (AL_c - AL_c_lack)/(mean(c(AL_c, AL_c_lack), rm.na = T))) # Relative AL
     
     ## influence of ad exposure on SWB
     n_ads = rpois(1, ad_xrate)
     
     max_mat_infl = rbeta(1, 10 * m, 10 * (1 - m)) # max influence of materialistic concepts on SWB
-    ad_con_split = rbeta(1, 5, 5) # the split influence of advertisement and consumption
+    ad_con_split = rbeta(1, 10, 10) # the split influence of advertisement and consumption
     
-    infl_ad_pct <- 1 - 0.5^n_ads
+    infl_ad_pct <- 1 - 0.5^(0.5*n_ads)
     
     if(n_ads == 0){
       ad = 0
@@ -115,25 +119,17 @@ for(i in rounds){
     } else{
       ad = sample(1:n_prods, n_ads) # What ads does an agent see?
       
-      ad_swb = ifelse(ad %in% agent$pp, 1, -1) * # does the agent have the object advertised for or not?
-        0.2533 # by how much is the agent influenced? 
+      ad_swb = ifelse(ad %in% agent$pp, 1, -1) * m * ad_factor # does the agent have the object advertised for or not?
       
-      ad_swb = mean(ad_swb)
+      ad_swb = sum(ad_swb)
     }
     
     swb = 0.5 * agent$set_level[1] + # set level happiness
       0.1 * agent$circumstance[1] + # set level circumstances - varying?
       0.4 * max_mat_infl * ad_con_split * 1 / (1 + exp(- swb_c)) + # influence of consumption on SWB
-      0.4 * max_mat_infl * (1 - ad_con_split) * infl_ad_pct * ad_swb +
-      0.4 * ((1 - max_mat_infl) + max_mat_infl * (1 - ad_con_split) * (1 - infl_ad_pct)) * rbeta(1, 5, 5) # random factor aka life
+      0.4 * max_mat_infl * (1 - ad_con_split) * infl_ad_pct * 1 / (1 + exp(- ad_swb)) +
+      0.4 * ((1 - max_mat_infl) + max_mat_infl * (1 - ad_con_split) * (1 - infl_ad_pct)) * rbeta(1, 50, 50) # random factor aka life
     
-    
-    AL_swb = sum(agent$swb / sort((agent$round + 1), decreasing = T), na.rm = T) + swb # AL at round i
-    AL_swb_lack = agent$AL_swb[i - 1] # AL at round i - 1
-    swb_AL = ifelse(AL_swb_lack == 0, 0, (AL_swb - AL_swb_lack)/mean(c(AL_swb, AL_swb_lack), rm.na = T)) # Relative AL
-    
-    dynamic_consumption = ifelse(i < 25, dynamic_consumption, swb_AL)
-    m = ifelse(c == 0, m - m * dynamic_consumption, m + (1 - m) * dynamic_consumption)
     
     round = i
     
@@ -157,7 +153,8 @@ for(i in rounds){
       pp5 = 0,
       w5 = 0,
       AL_swb,
-      swb_AL
+      swb_AL,
+      ad_swb
     )
     
     
@@ -173,7 +170,17 @@ for(i in rounds){
       agent$pp5[i] = sum(ifelse(agent$pp[(i-(compare-1)):i] == 0, 0, 1), na.rm = T)/compare
       agent$w5[i] = sum(agent$wealth[((compare-1)):i], na.rm = T)/compare
     }
+    
+    AL_swb = sum(agent$swb / sort((agent$round + 1), decreasing = T), na.rm = T) + agent$swb[i] # AL at round i
+    AL_swb_lack = agent$AL_swb[i - 1] # AL at round i - 1
+    swb_AL = ifelse(AL_swb_lack + AL_swb == 0,
+                    AL_swb_lack + AL_sw,
+                    (AL_swb - AL_swb_lack)/mean(c(AL_swb, AL_swb_lack), rm.na = T)) # Relative AL
 
+    
+    agent$materialism[i] = ifelse(c == 0, 
+                                  m - m * inv_logit(swb_AL)/100, 
+                                  m + (1 - m) * inv_logit(swb_AL)/100)
     
     world[[j]] <- agent
   }
@@ -187,11 +194,8 @@ for(i in rounds){
       agent1 <- world[[meeting$mix]]
       agent2 <- world[[meeting$match]]
       
-      # a1_n_pp = sum(ifelse(agent1$pp5 == 0, 0, 1))
-      # a2_n_pp = sum(ifelse(agent2$pp5 == 0, 0, 1))
-      
       if (agent1$pp5[i] + agent2$pp5[i] == 0) {
-        perc1 <-
+        perc1 <- 
           (1 - agent1$materialism[i]) * (agent1$swb5[i] - agent2$swb5[i]) +
           agent1$materialism[i] *
           (0.5 * ((agent1$w5[i] - agent2$w5[i]) / mean(c(agent1$w5[i], agent2$w5[i]), rm.na = T)) +
@@ -271,7 +275,8 @@ d <- data.frame(
     pp5 = NA,
     w5 = NA,
     AL_swb = NA,
-    swb_AL = NA
+    swb_AL = NA,
+    ad_swb = NA
 )
 
 for(i in 1:length(world)){
@@ -286,9 +291,13 @@ d <- d %>%
 ```
 
 ```{r}
+set.seed(47)
+
 d %>% filter(ID %in% sample(1:n_agents, 5)) %>% 
   ggplot(aes(x = round, y = swb, color = ID)) +
   geom_line()
+
+set.seed(47)
 
 d %>% filter(ID %in% sample(1:n_agents, 5)) %>% 
   ggplot(aes(x = round, y = swb5, color = ID)) +
@@ -299,6 +308,14 @@ d %>% filter(ID == 5) %>%
   geom_line(aes(y = swb), color = 'firebrick') +
   geom_line(aes(y = swb5), color = 'royalblue')
 
+d %>% filter(ID == 5) %>% 
+  ggplot(aes(x = round)) +
+  geom_line(aes(y = materialism), color = 'firebrick') +
+  geom_line(aes(y = swb5), color = 'royalblue')
+
+d %>% filter(ID == 1:5) %>% 
+  ggplot(aes(x = round)) +
+  geom_line(aes(y = materialism - swb5, color = ID)) 
 
 ```
 
@@ -364,6 +381,11 @@ d %>% ggplot(aes(x = log(w5),
   geom_point(alpha = 0.4, 
              shape = 1)
 
+d %>% ggplot(aes(x = round, 
+                 y = inv_logit( ad_swb), 
+                 color = ID)) +
+  geom_line(alpha = 0.8) 
+
 ```
 
 
@@ -372,7 +394,7 @@ d %>% ggplot(aes(x = round, y = si, color = ID)) +
   geom_line()
 
 d %>% ggplot(aes(x = round, 
-                 y = swb_AL, 
+                 y = inv_logit(swb_AL)/10, 
                  color = ID)) +
   geom_line(alpha = 0.8)
 
@@ -381,6 +403,78 @@ d %>% ggplot(aes(x = round,
                  color = ID)) +
   geom_line(alpha = 0.8) 
 ```
+
+```{r}
+d <- d %>% group_by(ID) %>% mutate(m_materialism = mean(materialism)) %>% ungroup()
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb5 - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = swb,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = swb5,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+```
+
+
+
 
 ```{r correlation tests}
 
