@@ -124,7 +124,8 @@ create.agent <- function(input) {
     w5 = w5,
     AL_swb = AL_swb_store,
     swb_AL = swb_AL_store,
-    ad_swb = rep(0,5)
+    ad_swb = rep(0,5),
+    n_ads = rep(0,5)
   )
 }
 
@@ -228,7 +229,8 @@ for(i in 6:rounds){
       w5 = 0,
       AL_swb = 0,
       swb_AL = 0,
-      ad_swb
+      ad_swb,
+      n_ads
     )
     
     
@@ -352,7 +354,8 @@ d <- data.frame(
     w5 = NA,
     AL_swb = NA,
     swb_AL = NA,
-    ad_swb = NA
+    ad_swb = NA,
+    n_ads = NA
 )
 
 # for(i in 1:length(world)){
@@ -400,9 +403,15 @@ d %>% filter(ID == 5) %>%
   geom_line(aes(y = materialism), color = 'firebrick') +
   geom_line(aes(y = swb5), color = 'royalblue')
 
-d %>% filter(ID == 1:5) %>% 
+d %>% filter(ID == 4 & round %% 6 == 0) %>% 
+  mutate(lack_swb = c(NA, swb5[1:length(swb5)-1]),
+                                 delta_swb = swb5 - lack_swb,
+                                 lack_materialism = c(NA, materialism[1:length(materialism)-1]),
+                                 delta_materialism = materialism - lack_materialism) %>% 
+
   ggplot(aes(x = round)) +
-  geom_line(aes(y = materialism - swb5, color = ID)) 
+  geom_line(aes(y = delta_swb), color = 'royalblue') + 
+  geom_line(aes(y = delta_materialism), color = 'firebrick')
 
 ```
 
@@ -443,6 +452,11 @@ d %>% ggplot(aes(x = materialism, y = swb5)) +
   geom_smooth(method = 'lm')
 
 d %>% ggplot(aes(x = materialism, 
+                 y = swb5,
+                 color = ID)) +
+  geom_point(alpha = 0.2, shape = 1) 
+
+d %>% ggplot(aes(x = n_ads, 
                  y = swb5,
                  color = ID)) +
   geom_point(alpha = 0.2, shape = 1) 
@@ -494,6 +508,105 @@ d %>% ggplot(aes(x = round,
                  color = ID)) +
   geom_line(alpha = 0.8) 
 ```
+
+```{r}
+d <- d %>% group_by(ID) %>% mutate(m_materialism = mean(materialism)) %>% ungroup()
+
+down_sample <- d %>% filter(as.numeric(ID) %% 2 == 0 & round %% 2 == 0)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4) +
+  ylab('Subjective Well-Being') +
+  theme(text = element_text(size = 8),
+        axis.text.x = element_text(angle = 0, hjust = 1)) 
+
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb5 - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)+
+  ylab('Subjective Well-Being (10 round mean)') +
+  theme(text = element_text(size = 8),
+        axis.text.x = element_text(angle = 0, hjust = 1)) 
+```
+
+```{r}
+reg <- function(x, y, col) abline(lm(y ~ x), col = col)
+
+panel.lm <-
+  function (x, y, col = par("col"), bg = NA, pch = par("pch"), 
+            cex = 1, col.smooth = "red", span = 2 / 3, iter = 3, ...)  {
+    points(x, y, pch = pch, col = col, bg = bg, cex = cex)
+    ok <- is.finite(x) & is.finite(y)
+    if (any(ok)) 
+      reg(x[ok], y[ok], col.smooth)
+  }
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...) {
+  usr <- par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- cor(x, y)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  text(0.5, 0.5, txt, cex = 1.1, font = 4)
+}
+
+d$w5
+```
+
+```{r}
+pairs( ~ materialism + swb + wealth + consumption + swb5 + w5, data = d,
+  panel = panel.lm,
+  cex = 1.5,
+  pch = 19,
+  col = adjustcolor(4, .4),
+  cex.labels = 2,
+  font.labels = 2,
+  lower.panel = panel.cor
+)
+
+
+pairs( ~ ACI + MindRead + APA + VH, data = d_sub,
+  panel = panel.lm,
+  cex = 1.5,
+  pch = 19,
+  col = adjustcolor(4, .4),
+  cex.labels = 2,
+  font.labels = 2,
+  lower.panel = panel.cor
+)
+
+
+
+```
+
+
+
 
 ```{r}
 d <- d %>% group_by(ID) %>% mutate(m_materialism = mean(materialism)) %>% ungroup()
