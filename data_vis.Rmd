@@ -1,0 +1,427 @@
+---
+title: "visualisation of models"
+author: "Ormo"
+date: "5/19/2021"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse,
+               zoo,
+               naniar)
+
+
+```
+
+
+
+```{r}
+set.seed(47)
+
+d %>% filter(ID %in% sample(1:n_agents, 5)) %>% 
+  ggplot(aes(x = round, y = swb, color = ID)) +
+  geom_line()
+
+set.seed(47)
+
+d %>% filter(ID %in% sample(1:n_agents, 5)) %>% 
+  ggplot(aes(x = round, y = swb10, color = ID)) +
+  geom_line()
+
+d %>% filter(ID == 5) %>% 
+  ggplot(aes(x = round)) +
+  geom_line(aes(y = swb), color = 'firebrick') +
+  geom_line(aes(y = swb10), color = 'royalblue')
+
+d %>% filter(ID == 5) %>% 
+  ggplot(aes(x = round)) +
+  geom_line(aes(y = materialism), color = 'firebrick') +
+  geom_line(aes(y = swb10), color = 'royalblue')
+
+d %>% filter(ID == 4 & round %% 6 == 0) %>% 
+  mutate(lack_swb = c(NA, swb10[1:length(swb10)-1]),
+                                 delta_swb = swb10 - lack_swb,
+                                 lack_materialism = c(NA, materialism[1:length(materialism)-1]),
+                                 delta_materialism = materialism - lack_materialism) %>% 
+
+  ggplot(aes(x = round)) +
+  geom_line(aes(y = delta_swb), color = 'royalblue') + 
+  geom_line(aes(y = delta_materialism), color = 'firebrick')
+
+d_models %>% filter(ID %% 4 == 0) %>%  group_by(ID) %>% 
+  mutate(ID = as.factor(ID),
+    lack_swb = c(NA, swb10[1:length(swb10) - 1]),
+    delta_swb = swb10 - lack_swb,
+    lack_materialism = c(NA, materialism[1:length(materialism) -1]),
+    delta_materialism = materialism - lack_materialism
+  ) %>%
+  ggplot(aes(x = delta_swb, y = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm')
+
+```
+
+```{r control graphs materialism}
+d %>% ggplot(aes(x = round, y = materialism, color = ID)) +
+  geom_line()
+
+d %>% filter(round %in% c(1,100,200,300,400)) %>% ggplot(aes(x = round, y = materialism, color = ID)) +
+  geom_line()
+
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb - 0.5 * set_level - 0.1 * circumstance)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb - 0.5 * set_level - 0.1 * circumstance,
+                 color = ID)) +
+  geom_point(alpha = 0.5, shape = 1) 
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb10 - 0.5 * set_level - 0.1 * circumstance)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb10 - 0.5 * set_level - 0.1 * circumstance,
+                 color = ID)) +
+  geom_point(alpha = 0.2, shape = 1)
+
+d %>% ggplot(aes(x = materialism, y = swb)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, y = swb10)) +
+  geom_point(alpha = 0.2, shape = 1) +
+  geom_smooth(method = 'lm')
+
+d %>% ggplot(aes(x = materialism, 
+                 y = swb10,
+                 color = ID)) +
+  geom_point(alpha = 0.2, shape = 1) 
+
+d %>% ggplot(aes(x = n_ads, 
+                 y = swb10,
+                 color = ID)) +
+  geom_point(alpha = 0.2, shape = 1) 
+```
+
+
+```{r control graphs SWB}
+d %>% ggplot(aes(x = round, 
+                 y = swb, 
+                 color = ID)) +
+  geom_line(alpha = 0.8) 
+
+d %>% ggplot(aes(x = round, 
+                 y = swb10, 
+                 color = ID)) +
+  geom_line(alpha = 0.8)
+
+d %>% ggplot(aes(x = w10, 
+                 y = swb10,
+                 color = ID)) +
+  geom_point(alpha = 0.2, 
+             shape = 1)
+
+d %>% ggplot(aes(x = log(w10), 
+                 y = swb10 - 0.5 * set_level - 0.1 * circumstance,
+                 color = ID)) +
+  geom_point(alpha = 0.4, 
+             shape = 1)
+
+d %>% ggplot(aes(x = log(w10), 
+                 y = swb10 ,
+                 color = ID)) +
+  geom_point(alpha = 0.4, 
+             shape = 1)
+
+d %>% ggplot(aes(x = round, 
+                 y = inv_logit(ad_swb), 
+                 color = ID)) +
+  geom_line(alpha = 0.8) 
+
+```
+
+
+```{r control graphs}
+d %>% ggplot(aes(x = round, y = si, color = ID)) +
+  geom_line()
+
+d %>% ggplot(aes(x = round, 
+                 y = swb_AL, 
+                 color = ID)) +
+  geom_line(alpha = 0.8)
+
+d %>% ggplot(aes(x = round, 
+                 y = AL_c, 
+                 color = ID)) +
+  geom_line(alpha = 0.8) 
+```
+
+```{r}
+d <- d %>% group_by(ID) %>% mutate(m_materialism = mean(materialism)) %>% ungroup()
+
+down_sample <- d %>% filter(as.numeric(ID) %% 1 == 0 & round %% 50 == 0)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4) +
+  ylab('Subjective Well-Being') +
+  theme(text = element_text(size = 8),
+        axis.text.x = element_text(angle = 0, hjust = 1)) 
+
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb10 - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)+
+  ylab('Subjective Well-Being (10 round mean)') +
+  theme(text = element_text(size = 8),
+        axis.text.x = element_text(angle = 0, hjust = 1)) 
+```
+
+```{r}
+reg <- function(x, y, col) abline(lm(y ~ x), col = col)
+
+panel.lm <-
+  function (x, y, col = par("col"), bg = NA, pch = par("pch"), 
+            cex = 1, col.smooth = "red", span = 2 / 3, iter = 3, ...)  {
+    points(x, y, pch = pch, col = col, bg = bg, cex = cex)
+    ok <- is.finite(x) & is.finite(y)
+    if (any(ok)) 
+      reg(x[ok], y[ok], col.smooth)
+  }
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...) {
+  usr <- par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- cor(x, y)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  text(0.5, 0.5, txt, cex = 1.1, font = 4)
+}
+
+d$w5
+```
+
+```{r}
+pairs( ~ materialism + swb + wealth + consumption + swb10 + w10, data = d,
+  panel = panel.lm,
+  cex = 1.5,
+  pch = 19,
+  col = adjustcolor(4, .4),
+  cex.labels = 2,
+  font.labels = 2,
+  lower.panel = panel.cor
+)
+
+
+```
+
+
+
+
+```{r}
+d <- d %>% group_by(ID) %>% mutate(m_materialism = mean(materialism)) %>% ungroup()
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb10 - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = swb,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+d %>% mutate(ID_n = as.numeric(ID),
+             ID = fct_reorder(ID, m_materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = swb10,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)
+
+```
+
+
+
+
+```{r correlation tests}
+
+cor.test(d$materialism, d$swb - 0.4 * d$set_level - 0.1 * d$circumstance)
+
+cor.test(d$wealth, d$swb - 0.4 * d$set_level - 0.1 * d$circumstance)
+
+cor.test(d$materialism, d$round)
+
+cor.test(d$swb, d$round)
+
+cor.test(d$swb5, d$round)
+
+
+```
+
+```{r}
+m1 <- lmer(data = d, swb ~ materialism + (1|ID))
+
+m2 <- lmer(data = d, 
+           swb5 ~ materialism + set_level + circumstance + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m3 <- lmer(data = d, 
+           swb ~ materialism + scale(wealth) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m4 <- lmer(data = d, 
+           swb ~ materialism + (1|ID) + (1|income),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m5 <- lmer(data = d, 
+           swb ~ materialism + scale(income) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m6 <- lmer(data = d, 
+           swb ~ materialism*scale(wealth) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m7 <- lmer(data = d, 
+           swb ~ materialism*scale(income) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m8 <- lmer(data = d, 
+           swb ~ materialism*scale(income)*scale(wealth) + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+m9 <- lmer(data = d, 
+           swb5 ~ materialism + (1|ID),
+           control = lmerControl(check.nobs.vs.nlev = "ignore", check.nobs.vs.nRE = "ignore"))
+
+lm(data = d, materialism ~ scale(round))
+
+m1
+m2 # swb5
+m3
+m4
+m5
+m6
+m7
+m8
+summary(m9)
+
+```
+
+
+
+
+```{r}
+dm <- d_models %>%  group_by(ID) %>% 
+  mutate(ID = as.factor(ID),
+    lack_swb = c(NA, IA_swb10[1:length(IA_swb10) - 1]),
+    delta_swb = IA_swb10 - lack_swb,
+    lack_materialism = c(NA, materialism[1:length(materialism) -1]),
+    delta_materialism = materialism - lack_materialism
+  ) 
+
+d %>% filter(as.numeric(ID) %% 4 == 0) %>%
+  ggplot(aes(x = delta_swb, y = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm')
+
+
+
+
+d %>%
+  ggplot(aes(x = delta_swb, y = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm')
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+

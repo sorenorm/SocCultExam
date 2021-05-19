@@ -1,0 +1,115 @@
+---
+title: "Untitled"
+author: "Ormo"
+date: "5/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+pacman::p_load(tidyverse,
+               zoo)
+
+```
+
+```{r}
+d_plot <- d %>%  group_by(ID) %>% 
+  mutate(ID = as.factor(ID),
+    lack_swb = c(NA, IA_swb10[1:length(IA_swb10) - 1]),
+    delta_swb = IA_swb10 - lack_swb,
+    lack_materialism = c(NA, materialism[1:length(materialism) -1]),
+    delta_materialism = materialism - lack_materialism,
+    delta_m_pos = ifelse(delta_materialism > 0, 'positive', 'negative'),
+    lack_delta_swb = c(NA, delta_swb[1:length(delta_swb) - 1]),
+    lack2_delta_swb = c(NA, lack_delta_swb[1:length(lack_delta_swb) - 1]),
+    lead_delta_swb = c(delta_swb[2:length(delta_swb)], NA),
+    lead2_delta_swb = c(lead_delta_swb[2:length(lead_delta_swb)], NA)
+  )
+```
+
+
+```{r}
+d_plot %>% filter(as.numeric(ID) %% 4 == 0) %>%
+  ggplot(aes(y = delta_swb, x = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ delta_m_pos, scales = 'free_x')
+
+d_plot %>% filter(as.numeric(ID) %% 4 == 0) %>%
+  ggplot(aes(y = lack_delta_swb, x = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ delta_m_pos, scales = 'free_x')
+
+d_plot %>% filter(as.numeric(ID) %% 4 == 0) %>%
+  ggplot(aes(y = lack2_delta_swb, x = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ delta_m_pos, scales = 'free_x')
+
+d_plot %>% filter(as.numeric(ID) %% 4 == 0) %>%
+  ggplot(aes(y = lead_delta_swb, x = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ delta_m_pos, scales = 'free_x')
+
+d_plot %>% filter(as.numeric(ID) %% 4 == 0) %>%
+  ggplot(aes(y = lead2_delta_swb, x = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~ delta_m_pos, scales = 'free_x')
+```
+
+
+```{r}
+lmer(data = d_plot,
+     formula = delta_swb ~ delta_materialism + delta_m_pos + (1 + delta_m_pos|ID))
+
+lmer(data = d_plot,
+     formula = lack_delta_swb ~ delta_materialism + delta_m_pos + (1 + delta_m_pos|ID))
+
+lmer(data = d_plot,
+     formula = lack2_delta_swb ~ delta_materialism + delta_m_pos + (1 + delta_m_pos|ID))
+
+lmer(data = d_plot,
+     formula = lack2_delta_swb ~ delta_materialism + (1|ID:delta_m_pos))
+
+
+lmer(data = d_plot,
+     formula = lack_delta_swb ~ delta_materialism + (1|ID) + (1|delta_m_pos))
+
+lmer(data = d_plot,
+     formula = lack_delta_swb ~ delta_materialism + (1|ID))
+
+lm(data = d_plot,
+     formula = lack_delta_swb ~ delta_materialism)
+
+lmer(data = d_plot,
+     formula = lack2_delta_swb ~ delta_materialism + (1|ID) + (1|delta_m_pos))
+
+lmer(data = d_plot,
+     formula = lack2_delta_swb ~ delta_materialism + (1|ID))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

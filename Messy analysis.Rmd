@@ -1,0 +1,282 @@
+---
+title: "Analyse"
+author: "Ormo"
+date: "5/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(pacman)
+
+p_load(brms, tidyverse)
+
+```
+
+```{r downsample}
+d_models <- read_csv('d.csv')
+
+d_models <- d_models %>% mutate(
+  round = round %>% as.numeric()
+)
+down_sample <- d_models %>% 
+  filter(as.numeric(ID) %% 4 == 0 & round %% 4 == 0) %>% 
+  mutate(ID = as.factor(ID))
+
+
+
+```
+
+
+```{r}
+f1 <- bf(swb5 ~ materialism + (1|ID))
+
+get_prior(f1, 
+          data = down_sample, 
+          family = gaussian())
+
+f1_prior <- c(
+  prior(normal(0, 0.1), class = b),
+  prior(normal(0.5, 0.2), class = Intercept),
+  prior(exponential(1), class = sd),
+  prior(exponential(1), class = sigma)
+)
+
+m1_prior <- brm(
+  f1,
+  data = down_sample,
+  family = gaussian(),
+  prior = f1_prior,
+  sample_prior = "only",
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 20),
+  chains = 4,
+  cores = 2,
+  backend="cmdstanr",
+  threads = threading(2)
+)
+
+m1 <- brm(
+  f1,
+  data = down_sample,
+  family = gaussian(),
+  prior = f1_prior,
+  sample_prior = T,
+  chains = 4,
+  cores = 2,
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 20),
+  backend="cmdstanr",
+  threads = threading(2)
+)
+
+pp_check(m1_prior, nsamples = 50)
+pp_check(m1, nsamples = 50)
+
+conditional_effects(m1)
+
+
+d$swb5 %>% dens()
+```
+
+```{r}
+post_m1 <- posterior_samples(m1)
+
+post_m1 %>% 
+  pivot_longer(c(b_Intercept, prior_Intercept), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() +
+  xlim(0.4,0.55)
+
+post_m1 %>% 
+  pivot_longer(c(b_materialism, prior_b), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() +
+  xlim(-0.05,0)
+
+post_m1 %>% 
+  pivot_longer(c(b_materialism, prior_b), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() +
+  xlim(-0.05,0)
+```
+
+```{r}
+mcmc_trace(m1,
+           pars = c("b_DiagnosisASD", 
+                    "b_DiagnosisTD", 
+                    'sd_Language__Intercept',
+                    'sd_Language:ID__Intercept',
+                    'sigma')) +
+  theme_classic() 
+```
+
+```{r}
+
+```
+
+
+```{r}
+f2 <- bf(IA_swb10 ~ round + (1|ID))
+
+get_prior(f2, 
+          data = d_models, 
+          family = gaussian())
+
+f2_prior <- c(
+  prior(normal(0, 0.005), class = b),
+  prior(normal(0.2, 0.01), class = Intercept),
+  prior(normal(0.5, 0.25), class = sd),
+  prior(normal(0.5, 0.25), class = sigma)
+)
+
+m2_prior <- brm(
+  f2,
+  data = down_sample,
+  family = gaussian(),
+  prior = f2_prior,
+  sample_prior = "only",
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 20),
+  chains = 2,
+  cores = 2,
+  backend="cmdstanr",
+  threads = threading(2)
+)
+
+m2 <- brm(
+  f2,
+  data = down_sample,
+  family = gaussian(),
+  prior = f2_prior,
+  sample_prior = T,
+  chains = 2,
+  cores = 4,
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 20),
+  backend="cmdstanr",
+  threads = threading(2)
+)
+
+pp_check(m2_prior, nsamples = 50) + xlim(0, 0.5)
+pp_check(m2, nsamples = 50)
+
+conditional_effects(m2)
+
+summary(m2)
+```
+
+```{r}
+dm <- d_models %>%  group_by(ID) %>% 
+  mutate(ID = as.factor(ID),
+    lack_swb = c(NA, IA_swb10[1:length(IA_swb10) - 1]),
+    delta_swb = IA_swb10 - lack_swb,
+    lack_materialism = c(NA, materialism[1:length(materialism) -1]),
+    delta_materialism = materialism - lack_materialism
+  ) 
+
+
+dm %>%
+  ggplot(aes(x = delta_swb, y = delta_materialism, color = ID)) +
+  geom_point(alpha = 0.1, shape = 1) +
+  geom_smooth(method = 'lm')
+```
+
+```{r}
+lmer(
+  data = dm,
+  formula = delta_swb ~ delta_materialism + (1|ID)
+)
+
+lm(
+  data = dm,
+  formula = delta_swb ~ delta_materialism
+)
+
+```
+
+
+---
+title: "Untitled"
+author: "Ormo"
+date: "5/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+d_x <- read.csv('exploration.csv') %>%
+  mutate(IA_swb10 = swb10 - 0.5 * set_level - 0.1 * circumstance)
+
+```
+
+```{r}
+d_x %>% ggplot(aes(fill = mode)) +
+  geom_density(aes(IA_swb10/0.4), alpha = 0.5) +
+  theme_minimal() +
+  xlab('Subjective Well-Being') +
+  scale_fill_manual(values = c('low' = 'royalblue', 
+                               'high' = 'firebrick',
+                               'normal' = 'darkgreen'),
+                    name = 'Materialism')
+
+d_x %>% mutate(ID = as.factor(ID),
+             ID = fct_reorder(ID, materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4, color = 'orange') +
+  facet_wrap(~ mode, scales = 'free_x') +
+  ylab('Subjective Well-Being')
+```
+
+
+```{r}
+freq_m1<- lmerTest::lmer(data = d,
+     formula = IA_swb10 ~ 0 + mode + (1|ID))
+
+freq_m2 <- lmerTest::lmer(data = d,
+     formula = IA_swb10 ~ materialism + (1|mode) + (1|ID))
+
+summary(freq_m2) # slope = -0.01262
+freq_m1
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
