@@ -1,0 +1,90 @@
+---
+title: "Data_Visualisation"
+author: "Ormo"
+date: "5/19/2021"
+output: html_document
+---
+
+```{r}
+library(pacman)
+
+p_load(tidyverse)
+
+dx <- read_csv('exploration.csv') %>% group_by(as.factor(ID)) %>% 
+  mutate(IA_swb10 = swb10 - 0.5 * set_level - 0.1 * circumstance) %>% ungroup()
+d <- read_csv('d.csv')
+```
+
+```{r}
+d %>% mutate(ID = as.factor(ID),
+             ID = fct_reorder(ID, materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4) +
+  ylab('Subjective Well-Being') +
+  theme(text = element_text(size = 8),
+        axis.text.x = element_text(angle = 0, hjust = 1)) 
+
+
+d %>% mutate(ID = as.factor(ID),
+             ID = fct_reorder(ID, materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb10 - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4)+
+  ylab('Subjective Well-Being (10 round mean)') +
+  theme(text = element_text(size = 8),
+        axis.text.x = element_text(angle = 0, hjust = 1))
+```
+
+
+```{r}
+dx %>% ggplot(aes(fill = mode)) +
+  geom_density(aes(IA_swb10/0.4), alpha = 0.5) +
+  theme_minimal() +
+  xlab('Subjective Well-Being') +
+  scale_fill_manual(values = c('low' = 'royalblue', 
+                               'high' = 'firebrick',
+                               'normal' = 'darkgreen'),
+                    name = 'Materialism')
+
+dx %>% mutate(ID = as.factor(ID),
+             ID = fct_reorder(ID, materialism)) %>%
+  ggplot(aes(x = ID, 
+             y = (swb - 0.5 * set_level - 0.1 * circumstance)/0.4,
+             color = materialism)) +
+  geom_point(alpha = 0.5, shape = 1, size = 3) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult=1), 
+                 geom="point", color="orange",
+               shape = 3) +
+  scale_color_gradient2(midpoint=median(d$materialism), 
+                        low="royalblue", 
+                        mid="black",
+                        high="firebrick", 
+                        space ="Lab") +
+  geom_hline(yintercept = 0.5, lty = 2, alpha = 0.4, color = 'orange') +
+  facet_wrap(~ mode, scales = 'free_x') +
+  ylab('Subjective Well-Being')
+
+```
+
+
