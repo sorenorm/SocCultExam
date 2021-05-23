@@ -1,0 +1,237 @@
+---
+title: "Bayesian models"
+author: "Kasper & Søren"
+date: "5/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse, 
+               rethinking,
+               zoo,
+               naniar,
+               lme4,
+               devtools,
+               brms)
+```
+
+```{r}
+d <- read_csv("d.csv")
+
+#Formula model 1
+Formula1 <- bf(IA_swb10 ~ materialism + (1|ID))
+
+#Formula model 2
+Formula2 <- bf(IA_swb10 ~ n_ads + (1 | ID))
+
+#Formula model 3
+Formula3 <- bf(IA_swb10 ~ materialism + n_ads + (1 | ID))
+
+#Formula model 4
+Formula4 <- bf(IA_swb10 ~ round + (1 | ID))
+
+#getting priors
+get_prior(Formula1, data = d, family = gaussian())
+get_prior(Formula2, data = d, family = gaussian())
+get_prior(Formula3, data = d, family = gaussian())
+get_prior(Formula4, data = d, family = gaussian())
+
+#Setting priors model 1
+Prior1 <- c(
+  prior(normal(0.2, 0.1), class = Intercept),
+  prior(normal(-0.1, 0.1), class = b),
+  prior(normal(0.1, 0.2), class = sigma)
+)
+
+#Setting priors model 2
+Prior2 <- c(
+  prior(normal(0.2, 0.1), class = Intercept),
+  prior(normal(-0.1, 0.1), class = b),
+  prior(normal(0.1, 0.2), class = sigma)
+)
+
+#Priors model 3
+Prior3 <- c(
+  prior(normal(0.20, 0.005), class = Intercept),
+  prior(normal(0, 0.01), class = b, coef = materialism),
+  prior(normal(0, 0.01), class = b, coef = n_ads),
+  prior(exponential(10), class = sigma)
+)
+
+#Setting priors model 4
+Prior4 <- c(
+  prior(normal(0.20, 0.01), class = Intercept),
+  prior(normal(0, 0.005), class = b),
+  prior(normal(0.5, 0.25), class = sigma)
+)
+
+
+#Model 1 prior only
+A0_m1 <- brm(
+  Formula1,
+  data = d,
+  family = gaussian(),
+  prior = Prior1,
+  sample_prior = "only",
+  backend = "cmdstanr",
+  chains = 2,
+  core = 2,
+  threads = threading(2)
+)
+
+#Model 1 
+A1_m1 <- brm(
+  Formula1,
+  data = d,
+  family = gaussian(),
+  prior = Prior1,
+  sample_prior = T,
+  backend = "cmdstanr",
+  chains = 2,
+  core = 2,
+  threads = threading(2)
+)
+
+#Summary of model
+summary(A1_m1)
+
+#PPchecks
+pp_check(A0_m1, nsamples = 50 + xlim(0, 5))
+pp_check(A1_m1, nsamples = 100)
+
+#Model 2 prior only
+A0_m2 <- brm(
+  Formula2,
+  data = d,
+  family = gaussian(),
+  prior = Prior2,
+  sample_prior = "only",
+  backend = "cmdstanr",
+  chains = 2,
+  core = 2,
+  threads = threading(2)
+)
+
+#Model 2 
+A1_m2 <- brm(
+  Formula2,
+  data = d,
+  family = gaussian(),
+  prior = Prior2,
+  sample_prior = T,
+  backend = "cmdstanr",
+  chains = 2,
+  core = 2,
+  threads = threading(2)
+)
+
+#Summary of model
+summary(A1_m2)
+
+#PP plots prior and posterior model 2
+pp_check(A0_m2, nsamples = 100)
+pp_check(A1_m2, nsamples = 100)
+
+#For the multiple regression I run the analysis on a smaller sample of the data
+smalldf1 <- d %>% filter(as.numeric(ID) %% 4 == 0)
+smalldf <- smalldf1 %>% filter(round %% 4 == 0)
+
+#Model 3 prior only
+A0_m3 <- brm(
+  Formula3,
+  data = smalldf,
+  family = gaussian(),
+  prior = Prior3,
+  sample_prior = "only",
+  control = list(
+    adapt_delta = 0.9,
+    max_treedepth = 15),
+  chains = 2,
+  core = 2,
+  backend = "cmdstanr",
+  threads = threading(2)
+)
+
+#Model 3
+A0_m3 <- brm(
+  Formula3,
+  data = smalldf,
+  family = gaussian(),
+  prior = Prior3,
+  sample_prior = T,
+  control = list(
+    adapt_delta = 0.9,
+    max_treedepth = 15),
+  chains = 2,
+  core = 2,
+  backend = "cmdstanr",
+  threads = threading(2)
+)
+
+#Summary of model 3
+summary(A1_m3)
+
+#PP plots
+pp_check(A0_m3, nsamples = 100)
+pp_check(A1_m3, nsamples = 100)
+
+#Model 4 prior only
+A0_m4 <- brm(
+  Formula4,
+  data = smalldf,
+  family = gaussian(),
+  prior = Prior4,
+  sample_prior = "only",
+  backend = "cmdstanr",
+  control = list(
+    adapt_delta = 0.9,
+    max_treedepth = 15),
+  chains = 2,
+  cores = 4,
+  threads = threading(4)
+)
+
+#Model 4
+A1_m4 <- brm(
+  Formula4,
+  data = smalldf,
+  family = gaussian(),
+  prior = Prior4,
+  sample_prior = T,
+  backend = "cmdstanr",
+  control = list(
+    adapt_delta = 0.9,
+    max_treedepth = 15),
+  chains = 2,
+  cores = 4,
+  threads = threading(4)
+)
+
+#Summary of model 4
+summary(A1_m4)
+
+#PP plots
+pp_check(A0_m4, nsamples = 100)
+pp_check(A1_m4, nsamples = 100)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
