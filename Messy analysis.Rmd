@@ -23,9 +23,10 @@ color_scheme_set("viridis")
 ```{r downsample}
 d <- read_csv('d.csv')
 
-d_models <- d_models %>% mutate(
-  round = round %>% as.numeric()
-)
+d_models <- d %>% 
+  mutate(
+  round = round %>% as.numeric())
+
 down_sample <- d_models %>% 
   filter(as.numeric(ID) %% 4 == 0 & round %% 4 == 0) %>% 
   mutate(ID = as.factor(ID))
@@ -136,10 +137,6 @@ mcmc_trace(m1,
   theme_classic() 
 ```
 
-```{r}
-
-```
-
 
 ```{r}
 f2 <- bf(IA_SWB ~ materialism*n_ads + (1|ID))
@@ -185,7 +182,7 @@ m2 <- brm(
     max_treedepth = 20),
   file = 'm2-interaction',
   backend="cmdstanr",
-  threads = threading(2)
+  threads = threading(4)
 )
 
 pp_check(m2_prior, nsamples = 50) + xlim(0, 0.5)
@@ -204,7 +201,101 @@ mcmc_trace(m2,
                     'sd_ID__Intercept', 
                     'sigma')) +
   theme_classic() 
+
+post_m2 <- posterior_samples(m2)
+post_m2$prior_sd_ID
+post_m2 %>% 
+  pivot_longer(c(b_Intercept, prior_Intercept), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() 
+
+post_m2 %>% 
+  pivot_longer(c(b_materialism, b_n_ads, prior_b, `b_materialism:n_ads`), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() +
+  xlim(-0.015, 0.005)
+
+post_m2 %>% 
+  pivot_longer(c(sigma, prior_sigma), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() +
+  xlim(0.015,0.025)
+
+post_m2 %>% 
+  pivot_longer(c(sd_ID__Intercept, prior_sd_ID), names_to = "Estimates") %>%
+  ggplot(aes(fill = Estimates)) +
+  geom_density(aes(value), alpha = 0.3) +
+  theme_minimal() +
+  xlim(0,0.01)
 ```
+
+```{r}
+f3 <- bf(IA_swb10 ~ materialism + n_ads + (1|ID))
+
+get_prior(f3, 
+          data = down_sample, 
+          family = gaussian())
+
+f3_prior <- c(
+  prior(normal(0, 0.05), class = b),
+  prior(normal(0.2, 0.01), class = Intercept),
+  prior(normal(0.1, 0.05), class = sd),
+  prior(normal(0.1, 0.05), class = sigma)
+)
+
+m3_prior <- brm(
+  f3,
+  data = down_sample,
+  family = gaussian(),
+  prior = f3_prior,
+  sample_prior = "only",
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 20),
+  chains = 2,
+  cores = 2,
+  backend="cmdstanr",
+  threads = threading(2)
+)
+
+m3 <- brm(
+  f3,
+  data = down_sample,
+  family = gaussian(),
+  prior = f3_prior,
+  sample_prior = T,
+  chains = 2,
+  cores = 4,
+  iter = 11000,
+  warmup = 10000,
+  control = list(
+    adapt_delta = 0.99,
+    max_treedepth = 20),
+  file = 'downsample-multiple',
+  backend="cmdstanr",
+  threads = threading(4)
+)
+
+pp_check(m3_prior, nsamples = 50) + xlim(0, 0.5)
+pp_check(m2, nsamples = 50)
+
+summary(m3)
+
+mcmc_trace(m3,
+           pars = c("b_Intercept",
+                    'b_materialism',
+                    'b_n_ads',
+                    'sd_ID__Intercept', 
+                    'sigma')) +
+  theme_classic() 
+
+```
+
+
+
 
 ```{r}
 dm <- d_models %>%  group_by(ID) %>% 
